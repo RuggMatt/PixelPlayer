@@ -73,7 +73,6 @@ import com.theveloper.pixelplay.data.media.CoverArtUpdate
 import com.theveloper.pixelplay.ui.theme.MontserratFamily
 import com.theveloper.pixelplay.presentation.viewmodel.SongInfoBottomSheetViewModel
 import kotlinx.coroutines.launch
-import java.io.File
 
 import androidx.compose.ui.graphics.TransformOrigin
 import com.theveloper.pixelplay.presentation.screens.TabAnimation
@@ -103,12 +102,26 @@ fun SongInfoBottomSheet(
     val isPixelPlayWatchAvailable by songInfoViewModel.isPixelPlayWatchAvailable.collectAsState()
     val isWatchAvailabilityResolved by songInfoViewModel.isWatchAvailabilityResolved.collectAsState()
     val isSendingToWatch by songInfoViewModel.isSendingToWatch.collectAsState()
-    val activeWatchTransfer by songInfoViewModel.activeWatchTransfer.collectAsState()
+    val watchTransfers by songInfoViewModel.watchTransfers.collectAsState()
     val watchSongIds by songInfoViewModel.watchSongIds.collectAsState()
-    val currentSongTransfer = activeWatchTransfer?.takeIf { it.songId == song.id }
+    val reachableWatchNodeIds by songInfoViewModel.reachableWatchNodeIds.collectAsState()
+    val latestSongWatchTransfer = remember(song.id, watchTransfers) {
+        watchTransfers.values
+            .asSequence()
+            .filter { it.songId == song.id }
+            .maxByOrNull { it.updatedAtMillis }
+    }
+    val currentSongTransfer = latestSongWatchTransfer?.takeIf {
+        it.status == com.theveloper.pixelplay.shared.WearTransferProgress.STATUS_TRANSFERRING
+    }
     val currentSongTransferPercent = ((currentSongTransfer?.progress ?: 0f) * 100f).toInt().coerceIn(0, 100)
-    val isSongSavedOnWatch = remember(song.id, watchSongIds, currentSongTransfer) {
-        currentSongTransfer == null && watchSongIds.contains(song.id)
+    val isSongSavedOnWatch = remember(
+        song.id,
+        watchSongIds,
+        reachableWatchNodeIds,
+        currentSongTransfer,
+    ) {
+        currentSongTransfer == null && songInfoViewModel.isSongSavedOnAllReachableWatches(song.id)
     }
     val canSendToWatch = remember(song.path, song.contentUriString) {
         songInfoViewModel.isLocalSongForWatchTransfer(song)
@@ -118,14 +131,41 @@ fun SongInfoBottomSheet(
         songInfoViewModel.refreshWatchAvailability()
     }
 
-    val shouldOfferWatchTransfer = remember(canSendToWatch, isSongSavedOnWatch) {
-        canSendToWatch && !isSongSavedOnWatch
+    var lastShownWatchTransferError by remember(song.id) { mutableStateOf<String?>(null) }
+    LaunchedEffect(
+        latestSongWatchTransfer?.requestId,
+        latestSongWatchTransfer?.status,
+        latestSongWatchTransfer?.error,
+    ) {
+        val failedTransfer = latestSongWatchTransfer?.takeIf {
+            it.status == com.theveloper.pixelplay.shared.WearTransferProgress.STATUS_FAILED &&
+                !it.error.isNullOrBlank()
+        } ?: return@LaunchedEffect
+        val errorKey = "${failedTransfer.requestId}:${failedTransfer.error}"
+        if (lastShownWatchTransferError == errorKey) return@LaunchedEffect
+        lastShownWatchTransferError = errorKey
+        Toast.makeText(context, failedTransfer.error, Toast.LENGTH_SHORT).show()
     }
-    var keepWatchTransferSlotStable by remember(song.id) { mutableStateOf(false) }
-    LaunchedEffect(shouldOfferWatchTransfer, isWatchAvailabilityResolved) {
-        if (shouldOfferWatchTransfer && !isWatchAvailabilityResolved) {
-            keepWatchTransferSlotStable = true
-        }
+
+    val shouldOfferWatchTransfer = remember(
+        canSendToWatch,
+        currentSongTransfer,
+        isPixelPlayWatchAvailable,
+        isSongSavedOnWatch,
+        isWatchAvailabilityResolved,
+    ) {
+        currentSongTransfer == null &&
+            canSendToWatch &&
+            isWatchAvailabilityResolved &&
+            isPixelPlayWatchAvailable &&
+            !isSongSavedOnWatch
+    }
+    val shouldShowWatchTransferLoading = remember(
+        canSendToWatch,
+        isWatchAvailabilityResolved,
+    ) {
+        canSendToWatch &&
+            !isWatchAvailabilityResolved
     }
 
     val evenCornerRadiusElems = 26.dp
@@ -452,11 +492,10 @@ fun SongInfoBottomSheet(
                                     }
                                 }
 
-                                val shouldRenderWatchTransferRow = shouldOfferWatchTransfer && (
-                                    !isWatchAvailabilityResolved ||
-                                        isPixelPlayWatchAvailable ||
-                                        keepWatchTransferSlotStable
-                                    )
+                                val shouldRenderWatchTransferRow =
+                                    currentSongTransfer != null ||
+                                        shouldOfferWatchTransfer ||
+                                        shouldShowWatchTransferLoading
                                 if (shouldRenderWatchTransferRow) {
                                     item {
                                         FilledTonalButton(
@@ -478,14 +517,14 @@ fun SongInfoBottomSheet(
                                                 disabledContentColor = MaterialTheme.colorScheme.onSurfaceVariant
                                             ),
                                             shape = CircleShape,
-                                            enabled = isPixelPlayWatchAvailable && !isSendingToWatch,
+                                            enabled = shouldOfferWatchTransfer && !isSendingToWatch,
                                             onClick = {
                                                 songInfoViewModel.sendSongToWatch(song) { message ->
                                                     Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
                                                 }
                                             }
                                         ) {
-                                            if (!isWatchAvailabilityResolved) {
+                                            if (shouldShowWatchTransferLoading) {
                                                 LoadingIndicator(modifier = Modifier.size(18.dp))
                                                 Spacer(Modifier.width(10.dp))
                                                 Text("Checking Watch")

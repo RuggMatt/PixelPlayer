@@ -131,6 +131,7 @@ class WearCommandReceiver : WearableListenerService() {
             WearDataPaths.TRANSFER_REQUEST -> runBlocking(Dispatchers.IO) {
                 handleTransferRequest(messageEvent)
             }
+            WearDataPaths.TRANSFER_PROGRESS -> handleWatchTransferProgress(messageEvent)
             WearDataPaths.TRANSFER_CANCEL -> handleTransferCancel(messageEvent)
             WearDataPaths.WATCH_LIBRARY_STATE -> handleWatchLibraryState(messageEvent)
             else -> Timber.tag(TAG).w("Unknown message path: ${messageEvent.path}")
@@ -148,6 +149,33 @@ class WearCommandReceiver : WearableListenerService() {
             )
         }.onFailure { error ->
             Timber.tag(TAG).e(error, "Failed to parse watch library state")
+        }
+    }
+
+    private fun handleWatchTransferProgress(messageEvent: MessageEvent) {
+        val progressJson = String(messageEvent.data, Charsets.UTF_8)
+        runCatching {
+            json.decodeFromString<WearTransferProgress>(progressJson)
+        }.onSuccess { progress ->
+            transferStateStore.markProgress(
+                requestId = progress.requestId,
+                songId = progress.songId,
+                bytesTransferred = progress.bytesTransferred,
+                totalBytes = progress.totalBytes,
+                status = progress.status,
+                error = progress.error,
+            )
+            if (
+                progress.status == WearTransferProgress.STATUS_FAILED &&
+                progress.error == WearTransferProgress.ERROR_ALREADY_ON_WATCH
+            ) {
+                transferStateStore.markSongPresentOnWatch(
+                    nodeId = messageEvent.sourceNodeId,
+                    songId = progress.songId,
+                )
+            }
+        }.onFailure { error ->
+            Timber.tag(TAG).e(error, "Failed to parse watch transfer progress")
         }
     }
 
@@ -1775,6 +1803,12 @@ class WearCommandReceiver : WearableListenerService() {
             status = status,
             error = error,
         )
+        if (status == WearTransferProgress.STATUS_COMPLETED) {
+            transferStateStore.markSongPresentOnWatch(
+                nodeId = nodeId,
+                songId = songId,
+            )
+        }
         val progress = WearTransferProgress(
             requestId = requestId,
             songId = songId,
