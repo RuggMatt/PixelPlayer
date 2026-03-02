@@ -1004,8 +1004,12 @@ class SettingsViewModel @Inject constructor(
                 }
                 is RestoreResult.PartialFailure -> {
                     val failedNames = result.failed.entries.joinToString { "${it.key.label}: ${it.value}" }
-                    _dataTransferEvents.emit("Partial restore. Failed: $failedNames")
-                    if (result.succeeded.isNotEmpty()) syncManager.sync()
+                    _dataTransferEvents.emit(
+                        "Restore completed with unresolved issues. Failed: $failedNames"
+                    )
+                    if (result.succeeded.isNotEmpty() || !result.rolledBack) {
+                        syncManager.sync()
+                    }
                 }
                 is RestoreResult.TotalFailure -> {
                     _dataTransferEvents.emit("Restore failed: ${result.error}")

@@ -78,6 +78,9 @@ import com.theveloper.pixelplay.presentation.viewmodel.ColorSchemePair
 import com.theveloper.pixelplay.shared.WearIntents
 import com.theveloper.pixelplay.utils.MediaItemBuilder
 import kotlin.math.abs
+import java.io.ByteArrayOutputStream
+import java.net.HttpURLConnection
+import java.net.URL
 
 import javax.inject.Inject
 
@@ -172,6 +175,8 @@ class MusicService : MediaLibraryService() {
         private const val AUTO_CONTEXT_ALBUM = "album"
         private const val AUTO_CONTEXT_ARTIST = "artist"
         private const val AUTO_CONTEXT_PLAYLIST = "playlist"
+        private const val MAX_WIDGET_ARTWORK_BYTES = 2 * 1024 * 1024
+        private const val DEFAULT_STREAM_BUFFER_SIZE = 8 * 1024
     }
 
     override fun onCreate() {
@@ -1279,7 +1284,7 @@ class MusicService : MediaLibraryService() {
         var title = currentItem?.mediaMetadata?.title?.toString().orEmpty()
         var artist = currentItem?.mediaMetadata?.artist?.toString().orEmpty()
         var mediaId = currentItem?.mediaId
-        var artworkUri = currentItem?.mediaMetadata?.artworkUri
+        var artworkUri = resolveArtworkUri(currentItem?.mediaMetadata)
         var artworkData = currentItem?.mediaMetadata?.artworkData
 
         resolveCastRemoteSnapshot()?.let { remote ->
@@ -1385,7 +1390,7 @@ class MusicService : MediaLibraryService() {
                         com.theveloper.pixelplay.data.model.QueueItem(
                             id = songId,
                             albumArtBitmapData = null,
-                            albumArtUri = mediaItem.mediaMetadata?.artworkUri?.toString()
+                            albumArtUri = resolveArtworkUri(mediaItem.mediaMetadata)?.toString()
                         )
                     )
                 }
@@ -1413,13 +1418,92 @@ class MusicService : MediaLibraryService() {
     private var cachedSchemeArtUri: String? = null
     private var cachedSchemePaletteStyle: AlbumArtPaletteStyle? = null
     private var cachedColorSchemePair: ColorSchemePair? = null
+    private var cachedWidgetArtUri: String? = null
+    private var cachedWidgetArtBytes: ByteArray? = null
+    private var cachedWidgetArtLoadFailureUri: String? = null
 
     private suspend fun getAlbumArtForWidget(embeddedArt: ByteArray?, artUri: Uri?): Pair<ByteArray?, String?> = withContext(Dispatchers.IO) {
         val artUriString = artUri?.toString()
-        // Prefer URI-driven lazy loading in widgets/wear publisher.
-        // Keep embedded bytes only when no URI is available.
-        val embedded = if (artUriString == null) embeddedArt?.takeIf { it.isNotEmpty() } else null
-        return@withContext embedded to artUriString
+        embeddedArt?.takeIf { it.isNotEmpty() }?.let { bytes ->
+            cachedWidgetArtUri = artUriString
+            cachedWidgetArtBytes = bytes
+            cachedWidgetArtLoadFailureUri = null
+            return@withContext bytes to artUriString
+        }
+
+        if (artUriString.isNullOrBlank()) {
+            return@withContext null to artUriString
+        }
+        val safeArtUri = artUri ?: return@withContext null to artUriString
+
+        if (artUriString == cachedWidgetArtUri && cachedWidgetArtBytes != null) {
+            return@withContext cachedWidgetArtBytes to artUriString
+        }
+        if (artUriString == cachedWidgetArtLoadFailureUri) {
+            return@withContext null to artUriString
+        }
+
+        val loadedBytes = loadArtworkBytesForWidget(safeArtUri)
+        if (loadedBytes != null) {
+            cachedWidgetArtUri = artUriString
+            cachedWidgetArtBytes = loadedBytes
+            cachedWidgetArtLoadFailureUri = null
+            return@withContext loadedBytes to artUriString
+        }
+
+        cachedWidgetArtLoadFailureUri = artUriString
+        return@withContext null to artUriString
+    }
+
+    private fun resolveArtworkUri(metadata: MediaMetadata?): Uri? {
+        metadata ?: return null
+        metadata.artworkUri?.let { return it }
+        val extrasUri = metadata.extras
+            ?.getString(MediaItemBuilder.EXTERNAL_EXTRA_ALBUM_ART)
+            ?.takeIf { it.isNotBlank() }
+            ?: return null
+        return runCatching { Uri.parse(extrasUri) }.getOrNull()
+    }
+
+    private fun loadArtworkBytesForWidget(uri: Uri): ByteArray? {
+        val scheme = uri.scheme?.lowercase()
+        return when (scheme) {
+            "content", "file", "android.resource" -> {
+                applicationContext.contentResolver.openInputStream(uri)?.use { input ->
+                    readBytesCapped(input, MAX_WIDGET_ARTWORK_BYTES)
+                }
+            }
+            "http", "https" -> {
+                val connection = (URL(uri.toString()).openConnection() as? HttpURLConnection)
+                    ?: return null
+                connection.connectTimeout = 4_000
+                connection.readTimeout = 6_000
+                connection.instanceFollowRedirects = true
+                connection.doInput = true
+                try {
+                    connection.inputStream.use { input ->
+                        readBytesCapped(input, MAX_WIDGET_ARTWORK_BYTES)
+                    }
+                } finally {
+                    connection.disconnect()
+                }
+            }
+            else -> null
+        }
+    }
+
+    private fun readBytesCapped(input: java.io.InputStream, maxBytes: Int): ByteArray? {
+        val output = ByteArrayOutputStream()
+        val buffer = ByteArray(DEFAULT_STREAM_BUFFER_SIZE)
+        var totalRead = 0
+        while (true) {
+            val read = input.read(buffer)
+            if (read <= 0) break
+            totalRead += read
+            if (totalRead > maxBytes) return null
+            output.write(buffer, 0, read)
+        }
+        return output.toByteArray().takeIf { it.isNotEmpty() }
     }
 
     private suspend fun updateGlanceWidgets(playerInfo: PlayerInfo) = withContext(Dispatchers.IO) {
