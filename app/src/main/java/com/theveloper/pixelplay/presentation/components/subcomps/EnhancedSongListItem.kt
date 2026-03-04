@@ -40,6 +40,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
@@ -77,9 +78,11 @@ fun EnhancedSongListItem(
     isLoading: Boolean = false,
     showAlbumArt: Boolean = true,
     customShape: androidx.compose.ui.graphics.Shape? = null,
+    containerColorOverride: Color? = null,
     isSelected: Boolean = false,
     selectionIndex: Int? = null,
     isSelectionMode: Boolean = false,
+    showMoreOptionsButton: Boolean = true,
     onLongPress: () -> Unit = {},
     onMoreOptionsClick: (Song) -> Unit,
     onClick: () -> Unit
@@ -119,31 +122,11 @@ fun EnhancedSongListItem(
             customShape
         } else {
             RoundedCornerShape(animatedCornerRadius)
-//            AbsoluteSmoothCornerShape(
-//                cornerRadiusTL = animatedCornerRadius,
-//                smoothnessAsPercentTR = 60,
-//                cornerRadiusTR = animatedCornerRadius,
-//                smoothnessAsPercentBR = 60,
-//                cornerRadiusBL = animatedCornerRadius,
-//                smoothnessAsPercentBL = 60,
-//                cornerRadiusBR = animatedCornerRadius,
-//                smoothnessAsPercentTL = 60
-//            )
         }
     }
 
     val albumShape = remember(animatedAlbumCornerRadius) {
         RoundedCornerShape(animatedAlbumCornerRadius)
-//        AbsoluteSmoothCornerShape(
-//            cornerRadiusTL = animatedAlbumCornerRadius,
-//            smoothnessAsPercentTR = 60,
-//            cornerRadiusTR = animatedAlbumCornerRadius,
-//            smoothnessAsPercentBR = 60,
-//            cornerRadiusBL = animatedAlbumCornerRadius,
-//            smoothnessAsPercentBL = 60,
-//            cornerRadiusBR = animatedAlbumCornerRadius,
-//            smoothnessAsPercentTL = 60
-//        )
     }
 
     val colors = MaterialTheme.colorScheme
@@ -153,7 +136,7 @@ fun EnhancedSongListItem(
         targetValue = when {
             isSelected -> colors.secondaryContainer
             isCurrentSong && !isLoading -> colors.primaryContainer
-            else -> colors.surfaceContainerLow
+            else -> containerColorOverride ?: colors.surfaceContainerLow
         },
         animationSpec = tween(durationMillis = 300),
         label = "containerColorAnimation"
@@ -186,7 +169,7 @@ fun EnhancedSongListItem(
                 .fillMaxWidth()
                 .clip(surfaceShape),
             shape = surfaceShape,
-            color = colors.surfaceContainerLow,
+            color = containerColorOverride ?: colors.surfaceContainerLow,
         ) {
             Row(
                 modifier = Modifier
@@ -371,7 +354,10 @@ fun EnhancedSongListItem(
                     )
                 }
                 
-                if (isCurrentSong && !isSelectionMode) {
+                val showPlayingIndicator = isCurrentSong && !isSelectionMode
+                val showTrailingAction = showMoreOptionsButton && !isSelectionMode
+
+                if (showPlayingIndicator) {
                      PlayingEqIcon(
                          modifier = Modifier
                              .padding(start = 8.dp)
@@ -380,11 +366,12 @@ fun EnhancedSongListItem(
                          isPlaying = isPlaying
                      )
                 }
-                
-                Spacer(modifier = Modifier.width(12.dp))
-                
-                // Hide more options button in selection mode
-                if (!isSelectionMode) {
+
+                if (showPlayingIndicator || showTrailingAction) {
+                    Spacer(modifier = Modifier.width(12.dp))
+                }
+
+                if (showTrailingAction) {
                     FilledIconButton(
                         onClick = { onMoreOptionsClick(song) },
                         colors = IconButtonDefaults.filledIconButtonColors(

@@ -275,6 +275,12 @@ fun HomeScreen(
                             onClickOpen = {
                                 navController.navigateSafely(Screen.DailyMixScreen.route)
                             },
+                            onNavigateToAlbum = { song ->
+                                navController.navigateSafely(Screen.AlbumDetail.createRoute(song.albumId))
+                            },
+                            onNavigateToArtist = { song ->
+                                navController.navigateSafely(Screen.ArtistDetail.createRoute(song.artistId))
+                            },
                             playerViewModel = playerViewModel
                         )
                     }
