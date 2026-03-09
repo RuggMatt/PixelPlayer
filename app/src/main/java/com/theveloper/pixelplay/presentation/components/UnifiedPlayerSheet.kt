@@ -355,7 +355,7 @@ fun UnifiedPlayerSheet(
     )
     val currentBottomPadding = sheetVisualState.currentBottomPadding
     val playerContentAreaHeightPxProvider = sheetVisualState.playerContentAreaHeightPxProvider
-    val visualSheetTranslationY = sheetVisualState.visualSheetTranslationY
+    val visualSheetTranslationYProvider = sheetVisualState.visualSheetTranslationYProvider
     val overallSheetTopCornerRadius = sheetVisualState.overallSheetTopCornerRadius
     val playerContentActualBottomRadius = sheetVisualState.playerContentActualBottomRadius
     val currentHorizontalPaddingStartPxProvider = sheetVisualState.currentHorizontalPaddingStartPxProvider
@@ -535,7 +535,7 @@ fun UnifiedPlayerSheet(
         Surface(
             modifier = Modifier
                 .fillMaxWidth()
-                .offset { IntOffset(0, visualSheetTranslationY.roundToInt()) }
+                .offset { IntOffset(0, visualSheetTranslationYProvider().roundToInt()) }
                 .height(containerHeight),
             shadowElevation = 0.dp,
             color = Color.Transparent

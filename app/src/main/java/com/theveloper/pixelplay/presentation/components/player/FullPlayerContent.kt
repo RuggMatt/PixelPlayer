@@ -123,7 +123,6 @@ import com.theveloper.pixelplay.ui.theme.GoogleSansRounded
 import com.theveloper.pixelplay.utils.AudioMetaUtils.mimeTypeToFormat
 import com.theveloper.pixelplay.utils.formatDuration
 import kotlinx.collections.immutable.ImmutableList
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import racra.compose.smooth_corner_rect_library.AbsoluteSmoothCornerShape
 import timber.log.Timber
@@ -188,18 +187,23 @@ fun FullPlayerContent(
     var showArtistPicker by rememberSaveable { mutableStateOf(false) }
     
     val lyricsSearchUiState by playerViewModel.lyricsSearchUiState.collectAsStateWithLifecycle()
-    val currentSongArtists by playerViewModel.currentSongArtists.collectAsStateWithLifecycle()
-    val lyricsSyncOffset by playerViewModel.currentSongLyricsSyncOffset.collectAsStateWithLifecycle()
-    val albumArtQuality by playerViewModel.albumArtQuality.collectAsStateWithLifecycle()
-    val playbackAudioMetadata by playerViewModel.playbackAudioMetadata.collectAsStateWithLifecycle()
-    val showPlayerFileInfo by playerViewModel.showPlayerFileInfo.collectAsStateWithLifecycle()
-    val immersiveLyricsEnabled by playerViewModel.immersiveLyricsEnabled.collectAsStateWithLifecycle()
-    val immersiveLyricsTimeout by playerViewModel.immersiveLyricsTimeout.collectAsStateWithLifecycle()
-    val isImmersiveTemporarilyDisabled by playerViewModel.isImmersiveTemporarilyDisabled.collectAsStateWithLifecycle()
-    val isRemotePlaybackActive by playerViewModel.isRemotePlaybackActive.collectAsStateWithLifecycle()
-    val selectedRouteName by playerViewModel.selectedRoute.map { it?.name }.collectAsStateWithLifecycle(initialValue = null)
-    val isBluetoothEnabled by playerViewModel.isBluetoothEnabled.collectAsStateWithLifecycle()
-    val bluetoothName by playerViewModel.bluetoothName.collectAsStateWithLifecycle()
+
+    // Single subscription — replaces 11 independent collectAsStateWithLifecycle calls.
+    // distinctUntilChanged in the ViewModel ensures this only emits when something
+    // actually changed, batching multiple rapid updates into one recomposition.
+    val fullPlayerSlice by playerViewModel.fullPlayerSlice.collectAsStateWithLifecycle()
+    val currentSongArtists = fullPlayerSlice.currentSongArtists
+    val lyricsSyncOffset = fullPlayerSlice.lyricsSyncOffset
+    val albumArtQuality = fullPlayerSlice.albumArtQuality
+    val playbackAudioMetadata = fullPlayerSlice.audioMetadata
+    val showPlayerFileInfo = fullPlayerSlice.showPlayerFileInfo
+    val immersiveLyricsEnabled = fullPlayerSlice.immersiveLyricsEnabled
+    val immersiveLyricsTimeout = fullPlayerSlice.immersiveLyricsTimeout
+    val isImmersiveTemporarilyDisabled = fullPlayerSlice.isImmersiveTemporarilyDisabled
+    val isRemotePlaybackActive = fullPlayerSlice.isRemotePlaybackActive
+    val selectedRouteName = fullPlayerSlice.selectedRouteName
+    val isBluetoothEnabled = fullPlayerSlice.isBluetoothEnabled
+    val bluetoothName = fullPlayerSlice.bluetoothName
 
     var showFetchLyricsDialog by remember { mutableStateOf(false) }
     var totalDrag by remember { mutableStateOf(0f) }

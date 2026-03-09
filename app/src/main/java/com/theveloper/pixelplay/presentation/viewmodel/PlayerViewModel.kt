@@ -559,6 +559,11 @@ class PlayerViewModel @Inject constructor(
 
     val castRoutes: StateFlow<List<MediaRouter.RouteInfo>> = castStateHolder.castRoutes
     val selectedRoute: StateFlow<MediaRouter.RouteInfo?> = castStateHolder.selectedRoute
+    /** Pre-mapped so UI composables don't create a new Flow on every recomposition. */
+    val selectedRouteName: StateFlow<String?> = castStateHolder.selectedRoute
+        .map { it?.name }
+        .distinctUntilChanged()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
     val routeVolume: StateFlow<Int> = castStateHolder.routeVolume
     val isRefreshingRoutes: StateFlow<Boolean> = castStateHolder.isRefreshingRoutes
 
@@ -798,6 +803,98 @@ class PlayerViewModel @Inject constructor(
     ) { songId, ids ->
         songId?.let { ids.contains(it) } ?: false
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+
+    // ---------------------------------------------------------------------------
+    // FullPlayerSlice — consolidates 11 independent flows into ONE subscription.
+    // Previously FullPlayerContent had ~13 separate collectAsStateWithLifecycle()
+    // calls. Each emission from any of them caused a recompose of the entire 2k-line
+    // composable. Now a single collect + distinctUntilChanged batches all settings.
+    // ---------------------------------------------------------------------------
+    data class FullPlayerSlice(
+        val currentSongArtists: List<Artist> = emptyList(),
+        val lyricsSyncOffset: Int = 0,
+        val albumArtQuality: AlbumArtQuality = AlbumArtQuality.MEDIUM,
+        val audioMetadata: PlaybackAudioMetadata = PlaybackAudioMetadata(),
+        val showPlayerFileInfo: Boolean = true,
+        val immersiveLyricsEnabled: Boolean = false,
+        val immersiveLyricsTimeout: Long = 4000L,
+        val isImmersiveTemporarilyDisabled: Boolean = false,
+        val isRemotePlaybackActive: Boolean = false,
+        val selectedRouteName: String? = null,
+        val isBluetoothEnabled: Boolean = false,
+        val bluetoothName: String? = null
+    )
+
+    // Intermediate combine #1: 5 settings flows
+    private val fullPlayerSlicePart1 = combine(
+        currentSongArtists,
+        currentSongLyricsSyncOffset,
+        albumArtQuality,
+        playbackAudioMetadata,
+        showPlayerFileInfo
+    ) { artists: List<Artist>, syncOffset: Int, artQuality: AlbumArtQuality,
+        audioMeta: PlaybackAudioMetadata, showFileInfo: Boolean ->
+        FullPlayerSlicePart1(artists, syncOffset, artQuality, audioMeta, showFileInfo)
+    }
+
+    private data class BluetoothSlice(val enabled: Boolean, val name: String?)
+
+    private val bluetoothSlice = combine(isBluetoothEnabled, bluetoothName) { bt, btName ->
+        BluetoothSlice(bt, btName)
+    }
+
+    // Intermediate combine #2: remaining flows (≤5 for Kotlin type inference)
+    private val fullPlayerSlicePart2 = combine(
+        immersiveLyricsEnabled,
+        immersiveLyricsTimeout,
+        isImmersiveTemporarilyDisabled,
+        isRemotePlaybackActive,
+        combine(selectedRouteName, bluetoothSlice) { route, bt -> route to bt }
+    ) { immersive: Boolean, immersiveTimeout: Long, immersiveDisabled: Boolean,
+        remotePb: Boolean, routeAndBt: Pair<String?, BluetoothSlice> ->
+        val (routeName, bt) = routeAndBt
+        FullPlayerSlicePart2(immersive, immersiveTimeout, immersiveDisabled, remotePb, routeName, bt.enabled, bt.name)
+    }
+
+    private data class FullPlayerSlicePart1(
+        val currentSongArtists: List<Artist>,
+        val lyricsSyncOffset: Int,
+        val albumArtQuality: AlbumArtQuality,
+        val audioMetadata: PlaybackAudioMetadata,
+        val showPlayerFileInfo: Boolean
+    )
+
+    private data class FullPlayerSlicePart2(
+        val immersiveLyricsEnabled: Boolean,
+        val immersiveLyricsTimeout: Long,
+        val isImmersiveTemporarilyDisabled: Boolean,
+        val isRemotePlaybackActive: Boolean,
+        val selectedRouteName: String?,
+        val isBluetoothEnabled: Boolean,
+        val bluetoothName: String?
+    )
+
+    val fullPlayerSlice: StateFlow<FullPlayerSlice> = combine(
+        fullPlayerSlicePart1,
+        fullPlayerSlicePart2
+    ) { p1, p2 ->
+        FullPlayerSlice(
+            currentSongArtists = p1.currentSongArtists,
+            lyricsSyncOffset = p1.lyricsSyncOffset,
+            albumArtQuality = p1.albumArtQuality,
+            audioMetadata = p1.audioMetadata,
+            showPlayerFileInfo = p1.showPlayerFileInfo,
+            immersiveLyricsEnabled = p2.immersiveLyricsEnabled,
+            immersiveLyricsTimeout = p2.immersiveLyricsTimeout,
+            isImmersiveTemporarilyDisabled = p2.isImmersiveTemporarilyDisabled,
+            isRemotePlaybackActive = p2.isRemotePlaybackActive,
+            selectedRouteName = p2.selectedRouteName,
+            isBluetoothEnabled = p2.isBluetoothEnabled,
+            bluetoothName = p2.bluetoothName
+        )
+    }
+        .distinctUntilChanged()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), FullPlayerSlice())
 
     // Library State - delegated to LibraryStateHolder
     // Favorites now use paginated flow from LibraryStateHolder (DB-level sort & filter)

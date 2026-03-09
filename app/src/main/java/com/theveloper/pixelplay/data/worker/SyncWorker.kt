@@ -116,11 +116,24 @@ constructor(
                         )
 
                     // --- MEDIA SCAN PHASE ---
-                    // Always run the pre-fetch media scan to detect files that are not yet indexed
-                    // by MediaStore (e.g., files added via USB/MTP).
-                    // Rebuild in particular must not skip this, otherwise it can clear DB data and
-                    // then fetch zero songs from a stale MediaStore index.
-                    triggerMediaScanForNewFiles(directoryResolver)
+                    // OPT #8: Filesystem walk cooldown.
+                    // triggerMediaScanForNewFiles() calls File.walkTopDown() on the external storage
+                    // root, which can touch thousands of inodes and cause noticeable I/O.
+                    // For INCREMENTAL syncs we skip it if we already ran within the last hour
+                    // (the MediaStore daemon itself picks up new files quickly via inotify).
+                    // FULL and REBUILD always run it unconditionally.
+                    val mediaScanCooldownMs = 60L * 60L * 1000L // 1 hour
+                    val timeSinceLastScan = System.currentTimeMillis() - lastSyncTimestamp
+                    val shouldRunMediaScan = syncMode != SyncMode.INCREMENTAL ||
+                            lastSyncTimestamp == 0L ||
+                            timeSinceLastScan >= mediaScanCooldownMs
+                    if (shouldRunMediaScan) {
+                        triggerMediaScanForNewFiles(directoryResolver)
+                    } else {
+                        Timber.tag(TAG).d(
+                            "Skipping filesystem walk — last scan was ${timeSinceLastScan / 1000}s ago (cooldown: ${mediaScanCooldownMs / 1000}s)"
+                        )
+                    }
 
                     // --- DELETION PHASE ---
                     // Detect and remove deleted songs efficiently using ID comparison
@@ -327,10 +340,30 @@ constructor(
                     val allSongIds = musicDao.getAllSongIds().toSet()
                     AlbumArtCacheManager.cleanOrphanedCacheFiles(applicationContext, allSongIds)
 
-                    // Sync cloud songs into the unified songs table
-                    syncTelegramData()
-                    syncNeteaseData()
-                    syncNavidromeData()
+                    // Sync cloud songs into the unified songs table.
+                    // OPT #7: Guard each source to avoid opening Room transactions when
+                    // the user hasn't configured that cloud provider.
+                    val hasTelegramChannels = telegramDao.getAllChannels().first().isNotEmpty()
+                    if (hasTelegramChannels) {
+                        syncTelegramData()
+                    } else {
+                        Log.d(TAG, "Skipping Telegram sync — no channels configured.")
+                    }
+
+                    // syncNeteaseData already has an internal isEmpty guard; a lightweight
+                    // count check here avoids even calling into the function.
+                    val neteaseCount = neteaseDao.getNeteaseCount()
+                    if (neteaseCount > 0) {
+                        syncNeteaseData()
+                    } else {
+                        Log.d(TAG, "Skipping Netease sync — no songs in local cache.")
+                    }
+
+                    if (navidromeRepository.isLoggedIn) {
+                        syncNavidromeData()
+                    } else {
+                        Log.d(TAG, "Skipping Navidrome sync — not logged in.")
+                    }
 
                     // Recalculate total
                     val finalTotalSongs = musicDao.getSongCount().first()

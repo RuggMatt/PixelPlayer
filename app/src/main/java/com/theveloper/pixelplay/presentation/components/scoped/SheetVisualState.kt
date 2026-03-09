@@ -20,7 +20,8 @@ internal data class SheetVisualState(
     val currentBottomPadding: Dp,
     /** Draw-phase provider: read this inside graphicsLayer to avoid layout relayout per frame. */
     val playerContentAreaHeightPxProvider: () -> Float,
-    val visualSheetTranslationY: Float,
+    /** Layout-phase provider: read inside .offset { } to avoid recomposition per drag frame. */
+    val visualSheetTranslationYProvider: () -> Float,
     val overallSheetTopCornerRadius: Dp,
     val playerContentActualBottomRadius: Dp,
     /** Draw-phase providers: read inside graphicsLayer to avoid layout relayout per frame. */
@@ -83,8 +84,14 @@ internal fun rememberSheetVisualState(
         }
     }
 
-    val visualSheetTranslationY by remember {
-        derivedStateOf {
+    // Lambda provider: read inside .offset { } block (layout phase) — avoids recomposition
+    // at ~60fps during drag gestures. The lambda captures Animatable refs and reads them at
+    // layout time, same pattern as the horizontal padding providers above.
+    val visualSheetTranslationYProvider: () -> Float = remember(
+        currentSheetTranslationY,
+        sheetCollapsedTargetY
+    ) {
+        {
             currentSheetTranslationY.value * (1f - predictiveBackCollapseProgress) +
                 (sheetCollapsedTargetY * predictiveBackCollapseProgress)
         }
@@ -259,7 +266,7 @@ internal fun rememberSheetVisualState(
     return SheetVisualState(
         currentBottomPadding = currentBottomPadding,
         playerContentAreaHeightPxProvider = playerContentAreaHeightPxProvider,
-        visualSheetTranslationY = visualSheetTranslationY,
+        visualSheetTranslationYProvider = visualSheetTranslationYProvider,
         overallSheetTopCornerRadius = overallSheetTopCornerRadius,
         playerContentActualBottomRadius = playerContentActualBottomRadius,
         currentHorizontalPaddingStartPxProvider = currentHorizontalPaddingStartPxProvider,

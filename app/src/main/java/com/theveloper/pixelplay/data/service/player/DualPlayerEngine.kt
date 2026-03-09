@@ -144,13 +144,11 @@ class DualPlayerEngine @Inject constructor(
                     telegramCacheManager.setActivePlayback(fileId)
                     Timber.tag("DualPlayerEngine").d("Telegram playback active: fileId=$fileId")
                 }
-                // Telegram streaming necesita Wake Mode para evitar cortes
-                (playerA as? ExoPlayer)?.setWakeMode(C.WAKE_MODE_LOCAL)
             } else {
                 // Limpieza para canciones que no son de Telegram
                 telegramCacheManager.setActivePlayback(null)
-                (playerA as? ExoPlayer)?.setWakeMode(C.WAKE_MODE_LOCAL)
             }
+            // Note: setWakeMode(WAKE_MODE_LOCAL) is set once in buildPlayer() — no need to repeat here.
 
             // --- Pre-Resolve Next/Prev Tracks para Performance ---
             try {
@@ -591,14 +589,8 @@ class DualPlayerEngine @Inject constructor(
             playerB.playWhenReady = false
             playerB.setMediaItem(resolvedItem)
             
-            // Set appropriate WakeMode for the next item
-            val scheme = mediaItem.localConfiguration?.uri?.scheme
-            if (scheme == "telegram" || scheme == "http" || scheme == "https") {
-                 playerB.setWakeMode(C.WAKE_MODE_LOCAL)
-            } else {
-                 playerB.setWakeMode(C.WAKE_MODE_LOCAL)
-            }
-            
+            // Note: setWakeMode is already set to WAKE_MODE_LOCAL in buildPlayer().
+            // No need to re-set per track — the value doesn't change.
             playerB.prepare()
             playerB.volume = 0f // Start silent
             if (startPositionMs > 0) {
@@ -908,6 +900,10 @@ class DualPlayerEngine @Inject constructor(
      */
     fun release() {
         transitionJob?.cancel()
+        // OPT #11: Cancel the scope to prevent coroutine leaks after release().
+        // Without this, any in-flight scope.launch { } coroutines (e.g. resolveCloudUri,
+        // preResolveTelegramUri) would continue running even after both ExoPlayers are released.
+        scope.coroutineContext[Job]?.cancel()
         abandonAudioFocus()
         if (::playerA.isInitialized) {
             playerA.removeListener(masterPlayerListener)
