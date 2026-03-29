@@ -252,6 +252,7 @@ private const val FOLDER_NAVIGATION_ROOT_KEY = "__folder_root__"
 private const val FOLDER_NAVIGATION_FORWARD = 1
 private const val FOLDER_NAVIGATION_BACKWARD = -1
 
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun WatchTransferProgressDialog(
     transfer: PhoneWatchTransferState,
