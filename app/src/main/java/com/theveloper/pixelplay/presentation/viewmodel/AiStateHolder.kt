@@ -29,7 +29,8 @@ class AiStateHolder @Inject constructor(
     private val aiMetadataGenerator: AiMetadataGenerator,
     private val dailyMixManager: DailyMixManager,
     private val playlistPreferencesRepository: PlaylistPreferencesRepository,
-    private val dailyMixStateHolder: DailyMixStateHolder
+    private val dailyMixStateHolder: DailyMixStateHolder,
+    private val notificationManager: AiNotificationManager
 ) {
     // State
     // AI State Management: Observables for tracking background generation progress
@@ -169,7 +170,9 @@ class AiStateHolder @Inject constructor(
                 )
 
                 // Step 2: Invoke AI Generation Engine
-                _aiStatus.value = "AI is curating your mix..."
+                _aiStatus.value = "Consulting the sonic oracle..."
+                notificationManager.showProgress("AI Curation", "Synthesizing your sonic journey...", 50)
+                
                 val result = aiPlaylistGenerator.generate(
                     userPrompt = prompt,
                     allSongs = allSongs,
@@ -195,6 +198,7 @@ class AiStateHolder @Inject constructor(
                             }
                             _aiStatus.value = "Success! Your mix is ready."
                             _aiSuccess.value = true
+                            notificationManager.showCompletion("Generation Complete", "Your AI Mix is ready to play.")
                             toastEmitter?.invoke("AI Playlist created!")
                             kotlinx.coroutines.delay(1200) // AI UI Optimization: Let the success animation breathe
                             dismissAiPlaylistSheet()
@@ -202,6 +206,7 @@ class AiStateHolder @Inject constructor(
                             // Play immediately logic
                             _aiStatus.value = "Starting playback..."
                             _aiSuccess.value = true
+                            notificationManager.showCompletion("Generation Complete", "Starting your personalized session.")
                             dailyMixStateHolder.setDailyMixSongs(generatedSongs)
                             playSongsCallback?.invoke(generatedSongs, generatedSongs.first(), "AI: $prompt")
                             openPlayerSheetCallback?.invoke()
@@ -209,10 +214,14 @@ class AiStateHolder @Inject constructor(
                             dismissAiPlaylistSheet()
                         }
                     } else {
+                        _aiStatus.value = null
                         _aiError.value = context.getString(R.string.ai_no_songs_found)
+                        notificationManager.hideProgress()
                     }
                 }.onFailure { error ->
+                    _aiStatus.value = null
                     _aiError.value = resolveAiErrorMessage(error)
+                    notificationManager.showCompletion("Generation Failed", "Could not curate your request.")
                 }
             } finally {
                 _isGeneratingAiPlaylist.value = false
@@ -297,9 +306,11 @@ class AiStateHolder @Inject constructor(
             val result = aiMetadataGenerator.generate(song, fields)
             if (result.isSuccess) {
                 _aiMetadataSuccess.value = true
+                notificationManager.showCompletion("Metadata Enhanced", "Applied tags and genre refinements.")
             } else {
                 result.exceptionOrNull()?.let {
                     _aiError.value = resolveAiErrorMessage(it)
+                    notificationManager.showCompletion("Metadata Error", "Check your AI configuration.")
                 }
             }
             result

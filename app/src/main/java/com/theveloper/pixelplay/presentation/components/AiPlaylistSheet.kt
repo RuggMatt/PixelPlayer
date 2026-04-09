@@ -235,7 +235,7 @@ fun AiPlaylistSheet(
 
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = "AI",
+                        text = if (isSuccess) "Perfectly Curated" else "Sonic Oracle",
                         style = ExpTitleTypography.displayMedium.copy(
                             fontSize = 32.sp,
                             fontWeight = FontWeight.Bold
@@ -243,7 +243,7 @@ fun AiPlaylistSheet(
                         color = if (isSuccess) colors.tertiary else colors.primary
                     )
                     Text(
-                        text = if (isSuccess) "Generation Complete" else "Playlist Generator",
+                        text = if (isSuccess) "Your sonic journey is ready" else "AI Playlist Generator",
                         style = MaterialTheme.typography.titleMedium,
                         fontFamily = GoogleSansRounded,
                         color = if (isSuccess) colors.tertiary else colors.onSurfaceVariant
@@ -372,20 +372,27 @@ fun AiPlaylistSheet(
                 Surface(
                     modifier = Modifier.fillMaxWidth(),
                     shape = smoothCornerShape,
-                    color = colors.tertiaryContainer
+                    color = colors.tertiaryContainer,
+                    tonalElevation = 4.dp
                 ) {
                     Row(
                         modifier = Modifier.padding(16.dp),
                         horizontalArrangement = Arrangement.Center,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Icon(Icons.Rounded.Check, null, tint = colors.onTertiaryContainer)
-                        Spacer(Modifier.width(8.dp))
+                        Icon(
+                            imageVector = Icons.Rounded.AutoAwesome, 
+                            contentDescription = null, 
+                            tint = colors.onTertiaryContainer,
+                            modifier = Modifier.size(24.dp)
+                        )
+                        Spacer(Modifier.width(12.dp))
                         Text(
-                            text = status ?: "Playlist generated successfully!",
+                            text = status ?: "Sonic journey synthesized!",
                             color = colors.onTertiaryContainer,
-                            style = MaterialTheme.typography.bodyMedium,
-                            fontWeight = FontWeight.Bold
+                            style = MaterialTheme.typography.bodyLarge,
+                            fontWeight = FontWeight.ExtraBold,
+                            fontFamily = GoogleSansRounded
                         )
                     }
                 }

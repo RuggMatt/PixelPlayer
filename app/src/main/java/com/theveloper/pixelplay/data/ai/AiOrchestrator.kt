@@ -34,6 +34,10 @@ class AiOrchestrator @Inject constructor(
             AiProvider.DEEPSEEK -> preferencesRepo.deepseekSystemPrompt.first()
             AiProvider.GROQ -> preferencesRepo.groqSystemPrompt.first()
             AiProvider.MISTRAL -> preferencesRepo.mistralSystemPrompt.first()
+            AiProvider.NVIDIA -> preferencesRepo.nvidiaSystemPrompt.first()
+            AiProvider.KIMI -> preferencesRepo.kimiSystemPrompt.first()
+            AiProvider.GLM -> preferencesRepo.glmSystemPrompt.first()
+            AiProvider.OPENAI -> preferencesRepo.openaiSystemPrompt.first()
         }
         return prompt.ifBlank { AiPreferencesRepository.DEFAULT_SYSTEM_PROMPT }
     }
@@ -44,6 +48,10 @@ class AiOrchestrator @Inject constructor(
             AiProvider.DEEPSEEK -> preferencesRepo.deepseekApiKey.first()
             AiProvider.GROQ -> preferencesRepo.groqApiKey.first()
             AiProvider.MISTRAL -> preferencesRepo.mistralApiKey.first()
+            AiProvider.NVIDIA -> preferencesRepo.nvidiaApiKey.first()
+            AiProvider.KIMI -> preferencesRepo.kimiApiKey.first()
+            AiProvider.GLM -> preferencesRepo.glmApiKey.first()
+            AiProvider.OPENAI -> preferencesRepo.openaiApiKey.first()
         }
     }
 
@@ -53,6 +61,10 @@ class AiOrchestrator @Inject constructor(
             AiProvider.DEEPSEEK -> preferencesRepo.deepseekModel.first()
             AiProvider.GROQ -> preferencesRepo.groqModel.first()
             AiProvider.MISTRAL -> preferencesRepo.mistralModel.first()
+            AiProvider.NVIDIA -> preferencesRepo.nvidiaModel.first()
+            AiProvider.KIMI -> preferencesRepo.kimiModel.first()
+            AiProvider.GLM -> preferencesRepo.glmModel.first()
+            AiProvider.OPENAI -> preferencesRepo.openaiModel.first()
         }
     }
 

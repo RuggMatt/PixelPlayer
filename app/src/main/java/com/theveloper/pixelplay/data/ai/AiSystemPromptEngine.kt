@@ -17,80 +17,82 @@ enum class AiSystemPromptType {
 class AiSystemPromptEngine @Inject constructor() {
 
     fun buildPrompt(basePersona: String, type: AiSystemPromptType, context: String = ""): String {
-        // AI Optimization: Layered prompts ensure strict format adherence while preserving personality
         val requirementLayer = when (type) {
             AiSystemPromptType.PLAYLIST -> """
-                ---
-                MUSICAL OBJECTIVE:
-                Create a cohesive sonic journey. Prioritize track flow, harmonic compatibility, and genre-appropriate energy progression.
+                <instructions>
+                Create a cohesive musical journey. Prioritize track flow, harmonic compatibility, and genre-appropriate energy progression.
+                </instructions>
                 
-                STRICT OUTPUT RULES:
-                1. Your response MUST be ONLY a raw JSON array of song IDs.
-                2. NO markdown code blocks (no ```json).
-                3. NO conversational text, NO explanations.
-                4. Example: ["id1", "id2", "id3"]
-                5. If no suitable match is found, return an empty array [].
+                <format_rules>
+                - Output MUST be a raw JSON array of song IDs.
+                - NO markdown, NO conversational text.
+                - Example: ["id1", "id2", "id3"]
+                </format_rules>
             """.trimIndent()
-
+ 
             AiSystemPromptType.METADATA -> """
-                ---
-                OBJECTIVE:
-                Provide highly accurate metadata based on the provided song info. Use standard naming conventions. 
-                For genres, be specific (e.g., 'Synthwave' instead of just 'Electronic').
+                <instructions>
+                Provide accurate technical metadata. Use specifics (e.g. 'Nu-Jazz' instead of 'Jazz').
+                </instructions>
                 
-                STRICT OUTPUT RULES:
-                1. Your response MUST be ONLY a raw JSON object matching this schema: 
-                   {"title": "...", "artist": "...", "album": "...", "genre": "..."}
-                2. Fill in ONLY the requested fields, use null or empty string for others.
-                3. NO markdown, NO conversational text.
+                <format_rules>
+                - Output MUST be a raw JSON object matching this schema:
+                  {"title": "...", "artist": "...", "album": "...", "genre": "..."}
+                - NO markdown, NO conversational text.
+                - Example: {"title": "Levitating", "artist": "Dua Lipa", "album": "Future Nostalgia", "genre": "Dance-Pop"}
+                </format_rules>
             """.trimIndent()
-
+ 
             AiSystemPromptType.TAGGING -> """
-                ---
-                STRICT OUTPUT RULES:
-                1. Provide 5-8 descriptive, evocative tags. 
-                2. Mix technical (e.g. '808-heavy', 'reverb-drenched') with atmospheric (e.g. 'liminal', 'neon-lit', 'melancholic').
-                3. Return as a CSV string. No JSON, no markdown.
-                4. Example: lo-fi, chill, nocturnal, rainy, study, vinyl-crackle
+                <instructions>
+                Provide 5-8 descriptive, evocative tags. Mix technical with atmospheric.
+                </instructions>
+                
+                <format_rules>
+                - Output MUST be a raw CSV string. No JSON, no markdown.
+                - Example: lofi, chill, nocturnal, rainy, study, vinyl-crackle
+                </format_rules>
             """.trimIndent()
-
+ 
             AiSystemPromptType.MOOD_ANALYSIS -> """
-                ---
-                STRICT OUTPUT RULES:
-                1. Return a single word for the primary mood.
-                2. Provide 0-1 scores for Energy, Valence, Danceability, and Acousticness.
-                3. Format: Mood | Energy:0.X | Valence:0.X | Danceability:0.X | Acousticness:0.X
+                <instructions>
+                Analyze the primary mood and core valence/energy metrics.
+                </instructions>
+                
+                <format_rules>
+                - Format: Mood | Energy:0.X | Valence:0.X | Danceability:0.X | Acousticness:0.X
+                - Example: Melancholic | Energy:0.3 | Valence:0.2 | Danceability:0.1 | Acousticness:0.8
+                </format_rules>
             """.trimIndent()
-
+ 
             AiSystemPromptType.PERSONA -> """
-                ---
-                INSTRUCTIONS:
-                1. Adopt the persona of a sophisticated musical curator and sonic expert.
-                2. Use descriptive, slightly poetic language when describing music.
-                3. Keep responses concise but impactful.
-                4. Reference the user's listening profile metrics to make responses feel personal.
+                <instructions>
+                Adopt the persona of a sophisticated sonic expert. Use poetic yet concise language.
+                Reference the user's metrics to make recommendations feel personal.
+                </instructions>
             """.trimIndent()
-
+ 
             AiSystemPromptType.GENERAL -> """
-                ---
-                STRICT OUTPUT RULES:
-                1. Respond clearly and concisely.
-                2. If the user asks about music, provide expert insights.
+                <instructions>
+                Respond clearly as a music-centric AI assistant.
+                </instructions>
             """.trimIndent()
         }
-
-        // AI Integration: Inject real-time user metrics and playback history for deep personalization
+ 
         val contextLayer = if (context.isNotBlank()) {
-            "--- USER_CONTEXT_START ---\n$context\n--- USER_CONTEXT_END ---"
+            "<user_context>\n$context\n</user_context>"
         } else ""
-
-        // AI Optimization: The core prompt is assembled from persona, context, and specialized requirements
+ 
         return """
+            <persona>
             $basePersona
+            </persona>
             
             $contextLayer
             
+            <requirements>
             $requirementLayer
+            </requirements>
         """.trimIndent()
     }
 }

@@ -48,23 +48,18 @@ class UserProfileDigestGenerator @Inject constructor(
             sb.append("PHASE_AFFINITY: $dominantPhase\n")
         }
         
-        // AI Integration: Discovery Velocity indicates how much new music the user is consuming
-        val totalPlays = summary.totalPlayCount
+        // AI Optimization: Discovery Velocity indicates how much new music the user is consuming
         val discoveryPlays = recentSummary.totalPlayCount
-        val discoveryVelocity = if (totalPlays > 0) (discoveryPlays.toDouble() / totalPlays) else 0.0
-        sb.append("DISCOVERY_VELOCITY: ${"%.2f".format(discoveryVelocity)} (High=Exploring, Low=Stagnant)\n")
-        
-        // Behavior stats for personalized tone
-        val avgSessionMin = summary.averageSessionDurationMs / (1000 * 60)
-        sb.append("BEHAVIOR: AvgSession=${avgSessionMin}m, TotalSessions=${summary.totalSessions}, Streak=${summary.longestStreakDays}d\n")
-        
-        // AI Integration: Variety Score helps AI decide between safe hits and deep cuts
         val varietyRatio = if (summary.totalPlayCount > 0) (summary.uniqueSongs.toDouble() / summary.totalPlayCount) else 0.0
-        sb.append("VARIETY_SCORE: ${"%.2f".format(varietyRatio)} (1.0=pure variety, 0.1=repeater)\n")
+        sb.append("DYNAMICS: discovery_ratio=${"%.2f".format(discoveryPlays.toDouble() / maxOf(1, summary.totalPlayCount))}, variety_score=${"%.2f".format(varietyRatio)}\n")
+        
+        // Behavioral Context: Skips and Sessions
+        val skipRatio = if (summary.totalPlayCount > 0) (summary.skipCount.toDouble() / summary.totalPlayCount) else 0.0
+        sb.append("BEHAVIOR: avg_session=${summary.averageSessionDurationMs / 60000}m, skip_rate=${"%.2f".format(skipRatio)}\n")
         
         // Temporal Focus (Weekday vs Weekend)
         val peakDay = summary.peakDayLabel ?: "Unknown"
-        sb.append("TEMPORAL_FOCUS: PeakDay=$peakDay\n")
+        sb.append("TEMPORAL_FOCUS: PeakDay=$peakDay, Streak=${summary.longestStreakDays}d\n")
         
         // Recent "Vibe"
         val recentTracks = summary.topSongs.take(5).joinToString(" | ") { "${it.title}-${it.artist}" }
