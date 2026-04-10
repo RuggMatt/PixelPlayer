@@ -11,8 +11,8 @@ import kotlinx.coroutines.withContext
 class GeminiAiClient(private val apiKey: String) : AiClient {
     
     companion object {
-        // Updated: Using the free tier 3.0-flash model as the default
-        private const val DEFAULT_GEMINI_MODEL = "gemini-3.0-flash"
+        // Updated: Using the free tier model exactly as named in the spec
+        private const val DEFAULT_GEMINI_MODEL = "gemini-3-flash-preview"
     }
     
     private fun createModel(modelName: String, systemPrompt: String, temp: Float = 0.7f): GenerativeModel {
@@ -134,14 +134,15 @@ class GeminiAiClient(private val apiKey: String) : AiClient {
     }
     
     private fun getDefaultModels(): List<String> {
-        // Updated fallback list: prioritize latest 3.x models
+        // Updated fallback list: prioritize free tiers & latest 3.x models
         return listOf(
-            "gemini-3.0-flash",
-            "gemini-3.5-flash",
-            "gemini-3.5-pro",
-            "gemini-3.0-pro",
+            "gemini-3-flash-preview",
+            "gemini-3.1-pro-preview",
+            "gemini-3.1-flash-lite-preview",
+            "gemini-flash-latest",
             "gemini-2.5-flash",
-            "gemini-2.5-pro"
+            "gemini-2.5-pro",
+            "gemini-2.0-flash"
         )
     }
 }
