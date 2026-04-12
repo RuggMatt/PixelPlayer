@@ -2,6 +2,7 @@ package com.theveloper.pixelplay.presentation.viewmodel
 
 import android.os.Trace
 import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import androidx.compose.ui.graphics.toArgb
 import android.util.Log
@@ -30,6 +31,12 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 private const val ENABLE_FOLDERS_STORAGE_FILTER = false
+private const val UNKNOWN_GENRE_NAME = "Unknown Genre"
+
+private data class GenreSeed(
+    val id: String,
+    val name: String
+)
 
 /**
  * Manages the data state of the music library: Songs, Albums, Artists, Folders.
@@ -130,45 +137,25 @@ class LibraryStateHolder @Inject constructor(
         .flatMapLatest { filter -> musicRepository.getFavoriteSongCountFlow(filter) }
         .flowOn(Dispatchers.IO)
 
-    @OptIn(ExperimentalStdlibApi::class)
     val genres: kotlinx.coroutines.flow.Flow<ImmutableList<com.theveloper.pixelplay.data.model.Genre>> = _allSongs
         .map { songs ->
-            val genreMap = mutableMapOf<String, MutableList<Song>>()
-            val unknownGenreName = "Unknown Genre"
+            songs.toGenreSeeds()
+        }
+        .distinctUntilChanged()
+        .map { seeds ->
+            seeds.map { seed ->
+                val lightThemeColor = com.theveloper.pixelplay.ui.theme.GenreThemeUtils.getGenreThemeColor(seed.id, isDark = false)
+                val darkThemeColor = com.theveloper.pixelplay.ui.theme.GenreThemeUtils.getGenreThemeColor(seed.id, isDark = true)
 
-            songs.forEach { song ->
-                val genreName = song.genre?.trim()
-                if (genreName.isNullOrBlank()) {
-                    genreMap.getOrPut(unknownGenreName) { mutableListOf() }.add(song)
-                } else {
-                    genreMap.getOrPut(genreName) { mutableListOf() }.add(song)
-                }
+                com.theveloper.pixelplay.data.model.Genre(
+                    id = seed.id,
+                    name = seed.name,
+                    lightColorHex = lightThemeColor.container.toHexString(),
+                    onLightColorHex = lightThemeColor.onContainer.toHexString(),
+                    darkColorHex = darkThemeColor.container.toHexString(),
+                    onDarkColorHex = darkThemeColor.onContainer.toHexString()
+                )
             }
-
-            genreMap.toList().mapIndexedNotNull { index, (genreName, songs) ->
-                if (songs.isNotEmpty()) {
-                    val id = if (genreName.equals(unknownGenreName, ignoreCase = true)) {
-                        "unknown"
-                    } else {
-                        genreName.lowercase().replace(" ", "_").replace("/", "_")
-                    }
-                    val lightThemeColor = com.theveloper.pixelplay.ui.theme.GenreThemeUtils.getGenreThemeColor(id, isDark = false)
-                    val darkThemeColor = com.theveloper.pixelplay.ui.theme.GenreThemeUtils.getGenreThemeColor(id, isDark = true)
-
-                    com.theveloper.pixelplay.data.model.Genre(
-                        id = id,
-                        name = genreName,
-                        lightColorHex = lightThemeColor.container.toHexString(),
-                        onLightColorHex = lightThemeColor.onContainer.toHexString(),
-                        darkColorHex = darkThemeColor.container.toHexString(),
-                        onDarkColorHex = darkThemeColor.onContainer.toHexString()
-                    )
-                } else {
-                    null
-                }
-            }
-                .distinctBy { it.id }
-                .sortedBy { it.name.lowercase() }
                 .toImmutableList()
         }
         .flowOn(Dispatchers.Default)
@@ -504,4 +491,37 @@ class LibraryStateHolder @Inject constructor(
 
 private fun androidx.compose.ui.graphics.Color.toHexString(): String {
     return String.format("#%08X", this.toArgb())
+}
+
+private fun Iterable<Song>.toGenreSeeds(): List<GenreSeed> {
+    val canonicalNamesById = linkedMapOf<String, String>()
+
+    for (song in this) {
+        val genreName = song.genre?.trim().takeUnless { it.isNullOrBlank() } ?: UNKNOWN_GENRE_NAME
+        val genreId = genreName.toGenreId()
+        val currentCanonicalName = canonicalNamesById[genreId]
+        canonicalNamesById[genreId] = if (currentCanonicalName == null) {
+            genreName
+        } else {
+            chooseCanonicalGenreName(currentCanonicalName, genreName)
+        }
+    }
+
+    return canonicalNamesById.entries
+        .map { (id, name) -> GenreSeed(id = id, name = name) }
+        .sortedBy { it.name.lowercase() }
+}
+
+private fun String.toGenreId(): String {
+    return if (equals(UNKNOWN_GENRE_NAME, ignoreCase = true)) {
+        "unknown"
+    } else {
+        lowercase().replace(" ", "_").replace("/", "_")
+    }
+}
+
+private fun chooseCanonicalGenreName(current: String, candidate: String): String {
+    val currentKey = current.lowercase()
+    val candidateKey = candidate.lowercase()
+    return if (candidateKey < currentKey) candidate else current
 }
