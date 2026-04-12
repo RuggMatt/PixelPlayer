@@ -129,6 +129,7 @@ private const val CAST_LOG_TAG = "PlayerCastTransfer"
 private const val ENABLE_FOLDERS_SOURCE_SWITCHING = false
 private const val MAX_ALBUM_BATCH_SELECTION = 6
 private const val SONG_ID_QUERY_CHUNK_SIZE = 900
+private const val HOME_MIX_PREVIEW_LIMIT = 48
 
 private fun List<Song>.toPlaybackQueue(): ImmutableList<Song> = when (this) {
     is PersistentList<Song> -> this
@@ -1050,6 +1051,22 @@ class PlayerViewModel @Inject constructor(
             initialValue = persistentListOf()
         )
 
+    val paletteRegenerationTargets: StateFlow<List<Song>> = musicRepository.getDistinctAlbumArtSongs()
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = emptyList()
+        )
+
+    val homeMixPreviewSongs: StateFlow<ImmutableList<Song>> = musicRepository.getHomeMixPreviewSongs(
+        limit = HOME_MIX_PREVIEW_LIMIT
+    ).map { it.toImmutableList() }
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = persistentListOf()
+        )
+
     val albumsFlow: StateFlow<ImmutableList<Album>> = libraryStateHolder.albums
     val artistsFlow: StateFlow<ImmutableList<Artist>> = libraryStateHolder.artists
 
@@ -1310,14 +1327,14 @@ class PlayerViewModel @Inject constructor(
         )
     }
 
-    fun shuffleAllSongs() {
+    fun shuffleAllSongs(queueName: String = "All Songs (Shuffled)") {
         Log.d("ShuffleDebug", "shuffleAllSongs called.")
         
         // Load random songs from DB instead of materializing the entire library
         viewModelScope.launch {
             val randomSongs = musicRepository.getRandomSongs(limit = 500)
             if (randomSongs.isNotEmpty()) {
-                playSongsShuffled(randomSongs, "All Songs (Shuffled)", startAtZero = true)
+                playSongsShuffled(randomSongs, queueName, startAtZero = true)
             }
         }
     }
@@ -3818,6 +3835,10 @@ class PlayerViewModel @Inject constructor(
 
     private fun stopProgressUpdates() {
         playbackStateHolder.stopProgressUpdates()
+    }
+
+    fun observeSongs(songIds: List<String>): Flow<List<Song>> {
+        return musicRepository.getSongsByIds(songIds)
     }
 
     suspend fun getSongs(songIds: List<String>) : List<Song>{

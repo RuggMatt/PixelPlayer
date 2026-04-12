@@ -590,6 +590,53 @@ class MusicRepositoryImpl @Inject constructor(
         musicDao.getAllSongsList().map { it.toSong() }
     }
 
+    @OptIn(ExperimentalCoroutinesApi::class)
+    override fun getDistinctAlbumArtSongs(): Flow<List<Song>> {
+        return combine(
+            userPreferencesRepository.allowedDirectoriesFlow,
+            userPreferencesRepository.blockedDirectoriesFlow
+        ) { allowedDirs, blockedDirs ->
+            allowedDirs to blockedDirs
+        }.flatMapLatest { (allowedDirs, blockedDirs) ->
+            flow {
+                val (allowedParentDirs, applyDirectoryFilter) =
+                    computeAllowedDirs(allowedDirs, blockedDirs)
+                emit(
+                    musicDao.getDistinctAlbumArtSongs(
+                        allowedParentDirs = allowedParentDirs,
+                        applyDirectoryFilter = applyDirectoryFilter
+                    )
+                )
+            }.flatMapLatest { it }
+        }.map { entities ->
+            entities.map { it.toSong() }
+        }.distinctUntilChanged().flowOn(Dispatchers.IO)
+    }
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    override fun getHomeMixPreviewSongs(limit: Int): Flow<List<Song>> {
+        return combine(
+            userPreferencesRepository.allowedDirectoriesFlow,
+            userPreferencesRepository.blockedDirectoriesFlow
+        ) { allowedDirs, blockedDirs ->
+            allowedDirs to blockedDirs
+        }.flatMapLatest { (allowedDirs, blockedDirs) ->
+            flow {
+                val (allowedParentDirs, applyDirectoryFilter) =
+                    computeAllowedDirs(allowedDirs, blockedDirs)
+                emit(
+                    musicDao.getHomeMixPreviewSongs(
+                        limit = limit,
+                        allowedParentDirs = allowedParentDirs,
+                        applyDirectoryFilter = applyDirectoryFilter
+                    )
+                )
+            }.flatMapLatest { it }
+        }.map { entities ->
+            entities.map { it.toSong() }
+        }.distinctUntilChanged().flowOn(Dispatchers.IO)
+    }
+
     override suspend fun getAllAlbumsOnce(): List<Album> = withContext(Dispatchers.IO) {
         musicDao.getAllAlbumsList(emptyList(), false).map { it.toAlbum() }
     }

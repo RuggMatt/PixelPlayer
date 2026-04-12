@@ -101,6 +101,17 @@ interface MusicRepository {
     suspend fun getAllSongsOnce(): List<Song>
 
     /**
+     * Returns one representative song per unique album art URI for maintenance tools that
+     * operate on artwork-derived palettes.
+     */
+    fun getDistinctAlbumArtSongs(): Flow<List<Song>>
+
+    /**
+     * Returns a bounded preview sample for Home without materializing the full library in UI.
+     */
+    fun getHomeMixPreviewSongs(limit: Int): Flow<List<Song>>
+
+    /**
      * Obtiene la lista completa de álbumes una sola vez.
      * @return Lista de objetos Album.
      */

@@ -468,6 +468,37 @@ interface MusicDao {
     ): Flow<List<SongEntity>>
 
     @Query("""
+        SELECT """ + SONG_LIST_PROJECTION + """
+        FROM songs
+        WHERE id IN (
+            SELECT MIN(id)
+            FROM songs
+            WHERE album_art_uri_string IS NOT NULL
+            AND album_art_uri_string != ''
+            AND (:applyDirectoryFilter = 0 OR id < 0 OR parent_directory_path IN (:allowedParentDirs))
+            GROUP BY album_art_uri_string
+        )
+        ORDER BY title COLLATE NOCASE ASC, artist_name COLLATE NOCASE ASC, id ASC
+    """)
+    fun getDistinctAlbumArtSongs(
+        allowedParentDirs: List<String>,
+        applyDirectoryFilter: Boolean
+    ): Flow<List<SongEntity>>
+
+    @Query("""
+        SELECT """ + SONG_LIST_PROJECTION + """
+        FROM songs
+        WHERE (:applyDirectoryFilter = 0 OR id < 0 OR parent_directory_path IN (:allowedParentDirs))
+        ORDER BY date_added DESC, id DESC
+        LIMIT :limit
+    """)
+    fun getHomeMixPreviewSongs(
+        limit: Int,
+        allowedParentDirs: List<String>,
+        applyDirectoryFilter: Boolean
+    ): Flow<List<SongEntity>>
+
+    @Query("""
         SELECT id, parent_directory_path, title, album_art_uri_string FROM songs
         WHERE (:applyDirectoryFilter = 0 OR id < 0 OR parent_directory_path IN (:allowedParentDirs))
         AND (

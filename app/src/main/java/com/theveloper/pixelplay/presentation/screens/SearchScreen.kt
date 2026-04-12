@@ -643,7 +643,6 @@ fun SearchResultsList(
 ) {
     val localDensity = LocalDensity.current
     val playerStableState by playerViewModel.stablePlayerState.collectAsStateWithLifecycle()
-    val allSongs by playerViewModel.allSongsFlow.collectAsStateWithLifecycle()
 
     if (results.isEmpty()) {
         Box(
@@ -818,9 +817,9 @@ fun SearchResultsList(
                             }
 
                             is SearchResultItem.PlaylistItem -> {
-                                val playlistSongs = remember(item.playlist.songIds, allSongs) {
-                                    allSongs.filter { it.id in item.playlist.songIds }
-                                }
+                                val playlistSongs by remember(item.playlist.songIds, playerViewModel) {
+                                    playerViewModel.observeSongs(item.playlist.songIds)
+                                }.collectAsStateWithLifecycle(initialValue = emptyList())
                                 val coroutineScope = rememberCoroutineScope()
                                 val onPlayClick: () -> Unit = {
                                     coroutineScope.launch {
