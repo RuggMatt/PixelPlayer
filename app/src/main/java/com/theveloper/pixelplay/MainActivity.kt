@@ -1003,7 +1003,7 @@ class MainActivity : ComponentActivity() {
                         if (syncProgress.hasProgress) {
                             Spacer(modifier = Modifier.height(4.dp))
                             Text(
-                                text = "Imported ${syncProgress.currentCount} of ${syncProgress.totalCount} songs",
+                                text = "Saved ${syncProgress.currentCount} of ${syncProgress.totalCount} songs",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
