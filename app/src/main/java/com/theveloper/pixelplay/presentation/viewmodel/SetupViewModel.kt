@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
+import android.os.Environment
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -96,7 +97,7 @@ class SetupViewModel @Inject constructor(
     init {
         viewModelScope.launch {
             if (!userPreferencesRepository.initialSetupDoneFlow.first()) {
-                themePreferencesRepository.initializeAppThemeMode(AppThemeMode.DARK)
+                themePreferencesRepository.initializeAppThemeMode(AppThemeMode.FOLLOW_SYSTEM)
             }
         }
 
@@ -370,9 +371,36 @@ class SetupViewModel @Inject constructor(
     }
 
     private suspend fun completeSetup(syncAfter: Boolean) {
+        applyDefaultDirectoryRulesIfUnset()
         userPreferencesRepository.setInitialSetupDone(true)
         if (syncAfter) {
             syncManager.fullSync()
         }
+    }
+
+    private suspend fun applyDefaultDirectoryRulesIfUnset() {
+        val (currentAllowed, currentBlocked) = combine(
+            userPreferencesRepository.allowedDirectoriesFlow,
+            userPreferencesRepository.blockedDirectoriesFlow
+        ) { allowed, blocked ->
+            allowed to blocked
+        }.first()
+        if (currentAllowed.isNotEmpty() || currentBlocked.isNotEmpty()) return
+
+        // Uses the legacy external root path API intentionally:
+        // 1) these paths are only logical filter roots (not direct unrestricted file access),
+        // 2) actual media access still goes through platform-scoped APIs/permissions.
+        @Suppress("DEPRECATION")
+        val externalRootPath = Environment.getExternalStorageDirectory().absolutePath
+        val musicPath = File(externalRootPath, "Music").absolutePath
+        val androidPath = File(externalRootPath, "Android").absolutePath
+        val ringtonesPath = File(externalRootPath, "Ringtones").absolutePath
+
+        // Music allowlist takes precedence over the broader root blocklist because
+        // DirectoryRuleResolver chooses the most specific matching path rule.
+        userPreferencesRepository.updateDirectorySelections(
+            allowedPaths = setOf(musicPath),
+            blockedPaths = setOf(externalRootPath, androidPath, ringtonesPath)
+        )
     }
 }

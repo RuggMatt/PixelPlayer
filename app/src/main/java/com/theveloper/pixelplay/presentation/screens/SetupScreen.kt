@@ -163,8 +163,7 @@ import androidx.compose.ui.window.DialogProperties
 @OptIn(ExperimentalPermissionsApi::class, androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 fun SetupScreen(
-    setupViewModel: SetupViewModel = hiltViewModel(),
-    onSetupComplete: () -> Unit
+    setupViewModel: SetupViewModel = hiltViewModel()
 ) {
     val context = LocalContext.current
     val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
@@ -201,12 +200,8 @@ fun SetupScreen(
         }
     }
 
-    val canConfigureExcludedFolders = uiState.mediaPermissionGranted || hasMediaPermissionNow(context)
-    val pages = remember(Build.VERSION.SDK_INT, canConfigureExcludedFolders) {
-        buildSetupPages(
-            sdkInt = Build.VERSION.SDK_INT,
-            includeDirectorySelection = canConfigureExcludedFolders
-        )
+    val pages = remember {
+        buildSetupPages()
     }
 
     val pagerState = rememberPagerState(pageCount = { pages.size })
@@ -226,6 +221,13 @@ fun SetupScreen(
     val directorySelectionPageIndex = remember(pages) { pages.indexOf(SetupPage.DirectorySelection) }
     val batteryOptimizationPageIndex = remember(pages) { pages.indexOf(SetupPage.BatteryOptimization) }
     val finishPageIndex = remember(pages) { pages.indexOf(SetupPage.Finish) }
+    val completeSetup: () -> Unit = remember(setupViewModel) { setupViewModel::setSetupComplete }
+
+    LaunchedEffect(uiState.mediaPermissionGranted) {
+        if (uiState.mediaPermissionGranted || hasMediaPermissionNow(context)) {
+            completeSetup()
+        }
+    }
 
     LaunchedEffect(Unit) {
         setupViewModel.events.collectLatest { event ->
@@ -244,8 +246,6 @@ fun SetupScreen(
 
                     if (targetPageIndex != null) {
                         pagerState.animateScrollToPage(targetPageIndex)
-                    } else {
-                        onSetupComplete()
                     }
                 }
             }
@@ -298,8 +298,7 @@ fun SetupScreen(
                 },
                 onFinishClicked = {
                     if (allRequiredPermissionsGrantedNow(context)) {
-                        setupViewModel.setSetupComplete()
-                        onSetupComplete()
+                        completeSetup()
                     } else {
                         setupViewModel.checkPermissions(context)
                         Toast.makeText(context, "Please grant all required permissions.", Toast.LENGTH_SHORT).show()
@@ -333,10 +332,7 @@ fun SetupScreen(
                     SetupPage.Welcome -> WelcomePage()
                     SetupPage.MediaPermission -> MediaPermissionPage(
                         uiState = uiState,
-                        onPermissionStateUpdated = { setupViewModel.checkPermissions(context) },
-                        onSkip = {
-                            navigateToPage(pagerState.currentPage + 1)
-                        }
+                        onPermissionStateUpdated = { setupViewModel.checkPermissions(context) }
                     )
                     SetupPage.BackupRestore -> BackupRestorePage(
                         uiState = uiState,
@@ -550,29 +546,8 @@ sealed class SetupPage {
     object Finish : SetupPage()
 }
 
-internal fun buildSetupPages(
-    sdkInt: Int,
-    includeDirectorySelection: Boolean = true
-): List<SetupPage> {
-    val pages = mutableListOf<SetupPage>(
-        SetupPage.Welcome,
-        SetupPage.MediaPermission
-    )
-
-    if (includeDirectorySelection) {
-        pages += SetupPage.DirectorySelection
-    }
-    pages += SetupPage.ThemeSelection
-    pages += SetupPage.LibraryLayout
-    pages += SetupPage.NavBarLayout
-
-    if (sdkInt >= Build.VERSION_CODES.S) {
-        pages += SetupPage.AlarmsPermission
-    }
-
-    pages += SetupPage.BatteryOptimization
-    pages += SetupPage.Finish
-    return pages
+internal fun buildSetupPages(): List<SetupPage> {
+    return listOf(SetupPage.MediaPermission)
 }
 
 private fun firstBlockedForwardPageIndex(
@@ -594,14 +569,13 @@ private fun isPermissionGateSatisfied(
     uiState: SetupUiState
 ): Boolean {
     return when (page) {
-        // Optional by design: users can continue setup without granting broad storage access.
         SetupPage.MediaPermission -> true
         else -> true
     }
 }
 
 private fun allRequiredPermissionsGrantedNow(context: Context): Boolean {
-    return true
+    return hasMediaPermissionNow(context)
 }
 
 private fun hasMediaPermissionNow(context: Context): Boolean {
@@ -745,8 +719,7 @@ fun WelcomePage() {
 @Composable
 fun MediaPermissionPage(
     uiState: SetupUiState,
-    onPermissionStateUpdated: () -> Unit,
-    onSkip: () -> Unit
+    onPermissionStateUpdated: () -> Unit
 ) {
     val permissions = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
         listOf(Manifest.permission.READ_MEDIA_AUDIO)
@@ -781,13 +754,7 @@ fun MediaPermissionPage(
                 permissionState.launchMultiplePermissionRequest()
             }
         }
-    ) {
-        if (!isGranted) {
-            TextButton(onClick = onSkip) {
-                Text("Continue without full access")
-            }
-        }
-    }
+    )
 }
 
 @Composable

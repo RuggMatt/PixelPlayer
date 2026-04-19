@@ -216,7 +216,7 @@ class MainActivity : ComponentActivity() {
             val permissions = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                 listOf(Manifest.permission.READ_MEDIA_AUDIO)
             } else {
-                emptyList()
+                listOf(Manifest.permission.READ_EXTERNAL_STORAGE)
             }
             @OptIn(ExperimentalPermissionsApi::class)
             val permissionState = rememberMultiplePermissionsState(permissions = permissions)
@@ -284,9 +284,7 @@ class MainActivity : ComponentActivity() {
                             label = "SetupTransition"
                         ) { shouldShowSetup ->
                             if (shouldShowSetup) {
-                                SetupScreen(onSetupComplete = {
-                                    // Repository-backed setup completion updates the gate automatically.
-                                })
+                                SetupScreen()
                             } else {
                                 MainAppContent(playerViewModel, mainViewModel)
                             }
