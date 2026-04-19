@@ -12,14 +12,6 @@ class SetupScreenPagesTest {
 
         assertFalse(pages.contains(SetupPage.DirectorySelection))
         assertTrue(pages.contains(SetupPage.MediaPermission))
-    }
-
-    @Test
-    fun buildSetupPages_neverIncludesDirectorySelection() {
-        val pages = buildSetupPages()
-
-        assertFalse(pages.contains(SetupPage.DirectorySelection))
         assertFalse(pages.contains(SetupPage.BackupRestore))
-        assertTrue(pages.contains(SetupPage.MediaPermission))
     }
 }
