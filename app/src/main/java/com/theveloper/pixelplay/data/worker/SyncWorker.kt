@@ -440,7 +440,7 @@ constructor(
                 addAll(songChunk.map { it.artistId })
                 addAll(chunkCrossRefs.map { it.artistId })
             }
-            val chunkAlbumIds = songChunk.mapTo(linkedSetOf()) { it.albumId }
+            val chunkAlbumIds = songChunk.map { it.albumId }.toSet()
 
             musicDao.incrementalSyncMusicDataChunk(
                     songs = songChunk,

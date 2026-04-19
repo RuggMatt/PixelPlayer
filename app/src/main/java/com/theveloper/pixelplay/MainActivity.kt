@@ -1004,7 +1004,7 @@ class MainActivity : ComponentActivity() {
                         if (syncProgress.hasProgress) {
                             Spacer(modifier = Modifier.height(4.dp))
                             Text(
-                                text = "Saved ${syncProgress.currentCount} of ${syncProgress.totalCount} songs",
+                                text = "Saving ${syncProgress.currentCount} of ${syncProgress.totalCount} songs",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
