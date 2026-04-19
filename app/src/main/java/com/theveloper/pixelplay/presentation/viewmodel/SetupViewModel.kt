@@ -382,17 +382,13 @@ class SetupViewModel @Inject constructor(
         val currentBlocked = userPreferencesRepository.blockedDirectoriesFlow.first()
         if (currentAllowed.isNotEmpty() || currentBlocked.isNotEmpty()) return
 
-        val externalRoot = context.getExternalFilesDir(null)
-            ?.canonicalFile
-            ?.parentFile
-            ?.parentFile
-            ?.parentFile
-            ?.parentFile
-            ?: File("/storage/emulated/0")
-        val externalRootPath = externalRoot.absolutePath
-        val musicPath = File(externalRoot, "Music").absolutePath
-        val androidPath = File(externalRoot, "Android").absolutePath
-        val ringtonesPath = File(externalRoot, "Ringtones").absolutePath
+        val externalRootPath = context.getExternalFilesDir(null)
+            ?.absolutePath
+            ?.substringBefore("/Android", missingDelimiterValue = "/storage/emulated/0")
+            ?: "/storage/emulated/0"
+        val musicPath = File(externalRootPath, "Music").absolutePath
+        val androidPath = File(externalRootPath, "Android").absolutePath
+        val ringtonesPath = File(externalRootPath, "Ringtones").absolutePath
 
         userPreferencesRepository.updateDirectorySelections(
             allowedPaths = setOf(musicPath),
