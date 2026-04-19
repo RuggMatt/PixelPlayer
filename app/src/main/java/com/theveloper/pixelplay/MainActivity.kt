@@ -284,9 +284,7 @@ class MainActivity : ComponentActivity() {
                             label = "SetupTransition"
                         ) { shouldShowSetup ->
                             if (shouldShowSetup) {
-                                SetupScreen(onSetupComplete = {
-                                    // Repository-backed setup completion updates the gate automatically.
-                                })
+                                SetupScreen()
                             } else {
                                 MainAppContent(playerViewModel, mainViewModel)
                             }

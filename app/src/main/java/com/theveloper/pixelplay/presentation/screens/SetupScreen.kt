@@ -163,8 +163,7 @@ import androidx.compose.ui.window.DialogProperties
 @OptIn(ExperimentalPermissionsApi::class, androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 fun SetupScreen(
-    setupViewModel: SetupViewModel = hiltViewModel(),
-    onSetupComplete: () -> Unit
+    setupViewModel: SetupViewModel = hiltViewModel()
 ) {
     val context = LocalContext.current
     val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
@@ -226,7 +225,6 @@ fun SetupScreen(
     LaunchedEffect(uiState.mediaPermissionGranted) {
         if (uiState.mediaPermissionGranted) {
             setupViewModel.setSetupComplete()
-            onSetupComplete()
         }
     }
 
@@ -248,7 +246,7 @@ fun SetupScreen(
                     if (targetPageIndex != null) {
                         pagerState.animateScrollToPage(targetPageIndex)
                     } else {
-                        onSetupComplete()
+                        setupViewModel.setSetupComplete()
                     }
                 }
             }
@@ -302,7 +300,6 @@ fun SetupScreen(
                 onFinishClicked = {
                     if (allRequiredPermissionsGrantedNow(context)) {
                         setupViewModel.setSetupComplete()
-                        onSetupComplete()
                     } else {
                         setupViewModel.checkPermissions(context)
                         Toast.makeText(context, "Please grant all required permissions.", Toast.LENGTH_SHORT).show()

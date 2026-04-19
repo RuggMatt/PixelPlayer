@@ -384,17 +384,13 @@ class SetupViewModel @Inject constructor(
         if (currentAllowed.isNotEmpty() || currentBlocked.isNotEmpty()) return
 
         @Suppress("DEPRECATION")
-        val fallbackExternalRootPath = Environment.getExternalStorageDirectory().absolutePath
-        val externalRootPath = context.getExternalFilesDir(null)
-            ?.absolutePath
-            ?.substringBefore("/Android", missingDelimiterValue = fallbackExternalRootPath)
-            ?: fallbackExternalRootPath
+        val externalRootPath = Environment.getExternalStorageDirectory().absolutePath
         val musicPath = File(externalRootPath, "Music").absolutePath
         val androidPath = File(externalRootPath, "Android").absolutePath
         val ringtonesPath = File(externalRootPath, "Ringtones").absolutePath
 
-        // Block broad roots but explicitly allow Music; DirectoryRuleResolver prefers the
-        // deepest (most specific) match, so Music remains included by default.
+        // Block broad roots but explicitly allow Music (see DirectoryRuleResolver.isBlocked:
+        // the deepest/specific matching rule wins).
         userPreferencesRepository.updateDirectorySelections(
             allowedPaths = setOf(musicPath),
             blockedPaths = setOf(externalRootPath, androidPath, ringtonesPath)
