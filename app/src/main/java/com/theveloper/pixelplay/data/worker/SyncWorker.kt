@@ -229,8 +229,7 @@ constructor(
                                         if (syncMode != SyncMode.REBUILD && provisionalSongs.isNotEmpty()) {
                                             val provisionalArtists =
                                                     provisionalSongs
-                                                            .associateBy { it.artistId }
-                                                            .values
+                                                            .distinctBy { it.artistId }
                                                             .map { song ->
                                                                 ArtistEntity(
                                                                         id = song.artistId,
@@ -240,8 +239,7 @@ constructor(
                                                             }
                                             val provisionalAlbums =
                                                     provisionalSongs
-                                                            .associateBy { it.albumId }
-                                                            .values
+                                                            .distinctBy { it.albumId }
                                                             .map { song ->
                                                                 AlbumEntity(
                                                                         id = song.albumId,
