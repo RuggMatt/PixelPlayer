@@ -41,11 +41,13 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.calculateTopPadding
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.material3.CircularWavyProgressIndicator
 import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
@@ -502,6 +504,7 @@ class MainActivity : ComponentActivity() {
         }
 
         val shouldShowInitialImportIndicator = isSyncing && !hasCompletedInitialSync
+        val statusBarTopPadding = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
         LaunchedEffect(shouldShowInitialImportIndicator) {
             if (!shouldShowInitialImportIndicator) {
                 isInitialImportDetailsExpanded = false
@@ -518,7 +521,7 @@ class MainActivity : ComponentActivity() {
                     onExpandedChange = { isInitialImportDetailsExpanded = it },
                     modifier = Modifier
                         .align(Alignment.TopEnd)
-                        .padding(top = 16.dp, end = 16.dp)
+                        .padding(top = statusBarTopPadding + 12.dp, end = 16.dp)
                 )
             }
         }
@@ -949,7 +952,7 @@ class MainActivity : ComponentActivity() {
             label = "SyncProgressAnimation"
         )
         val clampedAnimatedProgress = animatedProgress.coerceIn(0f, 1f)
-        val progressPercentLabel = "${(clampedAnimatedProgress * 100).toInt()}%"
+        val progressPercentLabel = "${(clampedAnimatedProgress * 100).toInt()}"
 
         Column(
             modifier = modifier,

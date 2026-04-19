@@ -215,16 +215,22 @@ constructor(
                                     forceMetadata,
                                     directoryResolver,
                                     syncMode == SyncMode.REBUILD,
-                                    progressBatchSize
-                            ) { current, total, phaseOrdinal ->
-                                setProgress(
-                                        workDataOf(
-                                                PROGRESS_CURRENT to current,
-                                                PROGRESS_TOTAL to total,
-                                                PROGRESS_PHASE to phaseOrdinal
+                                    progressBatchSize,
+                                    onProgress = { current, total, phaseOrdinal ->
+                                        setProgress(
+                                                workDataOf(
+                                                        PROGRESS_CURRENT to current,
+                                                        PROGRESS_TOTAL to total,
+                                                        PROGRESS_PHASE to phaseOrdinal
+                                                )
                                         )
-                                )
-                            }
+                                    },
+                                    onSongsBatchReady = { provisionalSongs ->
+                                        if (syncMode != SyncMode.REBUILD && provisionalSongs.isNotEmpty()) {
+                                            musicDao.insertSongs(provisionalSongs)
+                                        }
+                                    }
+                            )
 
                     Timber.tag(TAG)
                         .i("Fetched ${songsToInsert.size} new/modified songs from MediaStore.")
@@ -765,7 +771,8 @@ constructor(
             directoryResolver: DirectoryRuleResolver,
             isRebuild: Boolean,
             progressBatchSize: Int,
-            onProgress: suspend (current: Int, total: Int, phaseOrdinal: Int) -> Unit
+            onProgress: suspend (current: Int, total: Int, phaseOrdinal: Int) -> Unit,
+            onSongsBatchReady: (suspend (songs: List<SongEntity>) -> Unit)? = null
     ): List<SongEntity> {
         Trace.beginSection("SyncWorker.fetchMusicFromMediaStore")
 
@@ -942,6 +949,7 @@ constructor(
         // Process batches sequentially so each batch's existingMap can be GC'd before the next
         // batch is loaded. The semaphore still limits concurrency within each batch.
         val songs = mutableListOf<SongEntity>()
+        var provisionalImportCursor = 0
         for (batch in songsToProcess.chunked(200)) {
             val ids = batch.map { it.id }
             val existingMap = if (isRebuild) emptyMap() else musicDao.getSongsByIdsListSimple(ids).associateBy { it.id }
@@ -990,6 +998,18 @@ constructor(
                 }.awaitAll()
             }
             songs.addAll(batchResults)
+            onSongsBatchReady?.let { callback ->
+                while (songs.size - provisionalImportCursor >= UI_VISIBLE_INSERT_BATCH_SIZE) {
+                    val nextCursor = provisionalImportCursor + UI_VISIBLE_INSERT_BATCH_SIZE
+                    callback(songs.subList(provisionalImportCursor, nextCursor).toList())
+                    provisionalImportCursor = nextCursor
+                }
+            }
+        }
+        onSongsBatchReady?.let { callback ->
+            if (provisionalImportCursor < songs.size) {
+                callback(songs.subList(provisionalImportCursor, songs.size).toList())
+            }
         }
 
         Trace.endSection()
