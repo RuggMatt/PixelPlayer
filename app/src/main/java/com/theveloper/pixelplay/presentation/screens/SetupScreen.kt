@@ -604,6 +604,7 @@ private fun isPermissionGateSatisfied(
     uiState: SetupUiState
 ): Boolean {
     return when (page) {
+        // Optional by design: users can continue setup without granting broad storage access.
         SetupPage.MediaPermission -> true
         SetupPage.NotificationsPermission -> {
             uiState.notificationsPermissionGranted ||

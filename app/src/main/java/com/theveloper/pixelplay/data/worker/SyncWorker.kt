@@ -1200,6 +1200,8 @@ constructor(
 
         val externalRootPath = Environment.getExternalStorageDirectory().absolutePath
         val mediaFolderPath = File(externalRootPath, "Android/media").absolutePath
+        // Block the broad external root and explicitly allow Android/media so
+        // DirectoryRuleResolver's longest-match precedence keeps the scan limited.
         return setOf(mediaFolderPath) to (blockedDirs + externalRootPath)
     }
 
