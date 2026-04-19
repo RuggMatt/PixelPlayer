@@ -201,8 +201,12 @@ fun SetupScreen(
         }
     }
 
-    val pages = remember {
-        buildSetupPages(Build.VERSION.SDK_INT)
+    val canConfigureExcludedFolders = uiState.mediaPermissionGranted || hasMediaPermissionNow(context)
+    val pages = remember(Build.VERSION.SDK_INT, canConfigureExcludedFolders) {
+        buildSetupPages(
+            sdkInt = Build.VERSION.SDK_INT,
+            includeDirectorySelection = canConfigureExcludedFolders
+        )
     }
 
     val pagerState = rememberPagerState(pageCount = { pages.size })
@@ -282,7 +286,7 @@ fun SetupScreen(
                 pagerState = pagerState,
                 animated = (pagerState.currentPage != 0),
                 isNextButtonEnabled = isNextButtonEnabled,
-                isFinishButtonEnabled = uiState.allPermissionsGranted,
+                isFinishButtonEnabled = allRequiredPermissionsGrantedNow(context),
                 onNextClicked = {
                     val page = pages[pagerState.currentPage]
                     if (isPermissionGateSatisfied(context, page, uiState)) {
@@ -329,7 +333,10 @@ fun SetupScreen(
                     SetupPage.Welcome -> WelcomePage()
                     SetupPage.MediaPermission -> MediaPermissionPage(
                         uiState = uiState,
-                        onPermissionStateUpdated = { setupViewModel.checkPermissions(context) }
+                        onPermissionStateUpdated = { setupViewModel.checkPermissions(context) },
+                        onSkip = {
+                            navigateToPage(pagerState.currentPage + 1)
+                        }
                     )
                     SetupPage.BackupRestore -> BackupRestorePage(
                         uiState = uiState,
@@ -543,14 +550,19 @@ sealed class SetupPage {
     object Finish : SetupPage()
 }
 
-internal fun buildSetupPages(sdkInt: Int): List<SetupPage> {
+internal fun buildSetupPages(
+    sdkInt: Int,
+    includeDirectorySelection: Boolean = true
+): List<SetupPage> {
     val pages = mutableListOf<SetupPage>(
         SetupPage.Welcome,
         SetupPage.MediaPermission
     )
 
     pages += SetupPage.BackupRestore
-    pages += SetupPage.DirectorySelection
+    if (includeDirectorySelection) {
+        pages += SetupPage.DirectorySelection
+    }
     pages += SetupPage.ThemeSelection
     pages += SetupPage.LibraryLayout
     pages += SetupPage.NavBarLayout
@@ -583,15 +595,14 @@ private fun isPermissionGateSatisfied(
     uiState: SetupUiState
 ): Boolean {
     return when (page) {
-        SetupPage.MediaPermission -> {
-            uiState.mediaPermissionGranted || hasMediaPermissionNow(context)
-        }
+        // Optional by design: users can continue setup without granting broad storage access.
+        SetupPage.MediaPermission -> true
         else -> true
     }
 }
 
 private fun allRequiredPermissionsGrantedNow(context: Context): Boolean {
-    return hasMediaPermissionNow(context)
+    return true
 }
 
 private fun hasMediaPermissionNow(context: Context): Boolean {
@@ -735,7 +746,8 @@ fun WelcomePage() {
 @Composable
 fun MediaPermissionPage(
     uiState: SetupUiState,
-    onPermissionStateUpdated: () -> Unit
+    onPermissionStateUpdated: () -> Unit,
+    onSkip: () -> Unit
 ) {
     val permissions = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
         listOf(Manifest.permission.READ_MEDIA_AUDIO)
@@ -768,6 +780,12 @@ fun MediaPermissionPage(
         onGrantClicked = {
             if (!isGranted) {
                 permissionState.launchMultiplePermissionRequest()
+            }
+        }
+    ) {
+        if (!isGranted) {
+            TextButton(onClick = onSkip) {
+                Text("Continue without full access")
             }
         }
     )
