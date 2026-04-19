@@ -435,15 +435,9 @@ constructor(
 
         songs.chunked(UI_VISIBLE_INSERT_BATCH_SIZE).forEach { songChunk ->
             val songIds = songChunk.map { it.id }
-            val chunkCrossRefs = buildList {
-                songIds.forEach { songId ->
-                    addAll(crossRefsBySongId[songId].orEmpty())
-                }
-            }
-
-            val chunkArtistIds = LinkedHashSet<Long>()
-            songChunk.forEach { chunkArtistIds.add(it.artistId) }
-            chunkCrossRefs.forEach { chunkArtistIds.add(it.artistId) }
+            val chunkCrossRefs = songIds.flatMap { crossRefsBySongId[it].orEmpty() }
+            val chunkArtistIds = (songChunk.map { it.artistId } + chunkCrossRefs.map { it.artistId })
+                .toCollection(LinkedHashSet())
             val chunkAlbumIds = songChunk.mapTo(linkedSetOf()) { it.albumId }
 
             musicDao.incrementalSyncMusicDataChunk(
