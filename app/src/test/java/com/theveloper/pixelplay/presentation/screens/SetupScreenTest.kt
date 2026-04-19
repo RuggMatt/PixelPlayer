@@ -12,15 +12,7 @@ class SetupScreenTest {
 
         assertEquals(
             listOf(
-                SetupPage.Welcome,
-                SetupPage.MediaPermission,
-                SetupPage.DirectorySelection,
-                SetupPage.ThemeSelection,
-                SetupPage.LibraryLayout,
-                SetupPage.NavBarLayout,
-                SetupPage.AlarmsPermission,
-                SetupPage.BatteryOptimization,
-                SetupPage.Finish
+                SetupPage.MediaPermission
             ),
             pages
         )
@@ -32,14 +24,7 @@ class SetupScreenTest {
 
         assertEquals(
             listOf(
-                SetupPage.Welcome,
-                SetupPage.MediaPermission,
-                SetupPage.DirectorySelection,
-                SetupPage.ThemeSelection,
-                SetupPage.LibraryLayout,
-                SetupPage.NavBarLayout,
-                SetupPage.BatteryOptimization,
-                SetupPage.Finish
+                SetupPage.MediaPermission
             ),
             pages
         )

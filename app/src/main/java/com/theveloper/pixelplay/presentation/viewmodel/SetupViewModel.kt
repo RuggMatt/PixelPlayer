@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
+import android.os.Environment
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -96,7 +97,7 @@ class SetupViewModel @Inject constructor(
     init {
         viewModelScope.launch {
             if (!userPreferencesRepository.initialSetupDoneFlow.first()) {
-                themePreferencesRepository.initializeAppThemeMode(AppThemeMode.DARK)
+                themePreferencesRepository.initializeAppThemeMode(AppThemeMode.FOLLOW_SYSTEM)
             }
         }
 
@@ -370,9 +371,26 @@ class SetupViewModel @Inject constructor(
     }
 
     private suspend fun completeSetup(syncAfter: Boolean) {
+        applyDefaultDirectoryRulesIfUnset()
         userPreferencesRepository.setInitialSetupDone(true)
         if (syncAfter) {
             syncManager.fullSync()
         }
+    }
+
+    private suspend fun applyDefaultDirectoryRulesIfUnset() {
+        val currentAllowed = userPreferencesRepository.allowedDirectoriesFlow.first()
+        val currentBlocked = userPreferencesRepository.blockedDirectoriesFlow.first()
+        if (currentAllowed.isNotEmpty() || currentBlocked.isNotEmpty()) return
+
+        val externalRoot = Environment.getExternalStorageDirectory()
+        val musicPath = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_MUSIC).absolutePath
+        val androidPath = File(externalRoot, "Android").absolutePath
+        val ringtonesPath = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_RINGTONES).absolutePath
+
+        userPreferencesRepository.updateDirectorySelections(
+            allowedPaths = setOf(musicPath),
+            blockedPaths = setOf(externalRoot.absolutePath, androidPath, ringtonesPath)
+        )
     }
 }

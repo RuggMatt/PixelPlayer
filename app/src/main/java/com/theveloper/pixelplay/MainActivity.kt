@@ -216,7 +216,7 @@ class MainActivity : ComponentActivity() {
             val permissions = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                 listOf(Manifest.permission.READ_MEDIA_AUDIO)
             } else {
-                emptyList()
+                listOf(Manifest.permission.READ_EXTERNAL_STORAGE)
             }
             @OptIn(ExperimentalPermissionsApi::class)
             val permissionState = rememberMultiplePermissionsState(permissions = permissions)
@@ -227,6 +227,12 @@ class MainActivity : ComponentActivity() {
                     isBenchmarkMode -> false
                     isSetupComplete == null -> null
                     else -> !isSetupComplete!! || !permissionsValid
+                }
+            }
+
+            LaunchedEffect(isBenchmarkMode, isSetupComplete, permissionsValid) {
+                if (!isBenchmarkMode && isSetupComplete == false && permissionsValid) {
+                    userPreferencesRepository.setInitialSetupDone(true)
                 }
             }
 
