@@ -34,12 +34,17 @@ object GenreTypography {
         val horizontalPaddingPx: Int
     )
 
+    // 256 entries comfortably covers all genre cards across grid/list widths and common font-scale variations.
     private const val TITLE_PRESENTATION_CACHE_LIMIT = 256
-    private val titlePresentationCache = LinkedHashMap<TitleCacheKey, TitlePresentation>(
+    private val titlePresentationCache = object : LinkedHashMap<TitleCacheKey, TitlePresentation>(
         TITLE_PRESENTATION_CACHE_LIMIT,
         0.75f,
         true
-    )
+    ) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<TitleCacheKey, TitlePresentation>?): Boolean {
+            return size > TITLE_PRESENTATION_CACHE_LIMIT
+        }
+    }
 
     @OptIn(ExperimentalTextApi::class)
     fun resolveTitlePresentation(
@@ -58,68 +63,67 @@ object GenreTypography {
             cardWidthPx = cardWidthPx,
             horizontalPaddingPx = horizontalPaddingPx
         )
+        return getOrPutCachedTitlePresentation(cacheKey) {
+            val profile = GenreTitleProfile.from(normalizedName)
+            val hash = genreId.hashCode().toLong().absoluteValue
+            val fullLineWidthPx = (cardWidthPx - (horizontalPaddingPx * 2)).coerceAtLeast(0)
+            val secondLineWidthFraction = secondLineWidthFraction(profile, isGridView)
+            val secondLineWidthPx = (fullLineWidthPx * secondLineWidthFraction).roundToInt().coerceAtLeast(0)
+            val words = normalizedName.split(" ").filter { it.isNotBlank() }
+            val styleCandidates = buildStyleCandidates(hash = hash, profile = profile, isGridView = isGridView)
 
-        getCachedTitlePresentation(cacheKey)?.let { return it }
+            styleCandidates.forEach { style ->
+                if (fitsSingleLine(normalizedName, style, fullLineWidthPx, textMeasurer)) {
+                    return@getOrPutCachedTitlePresentation TitlePresentation(
+                        firstLine = normalizedName,
+                        secondLine = null,
+                        style = style,
+                        secondLineWidthFraction = secondLineWidthFraction
+                    )
+                }
 
-        val profile = GenreTitleProfile.from(normalizedName)
-        val hash = genreId.hashCode().toLong().absoluteValue
-        val fullLineWidthPx = (cardWidthPx - (horizontalPaddingPx * 2)).coerceAtLeast(0)
-        val secondLineWidthFraction = secondLineWidthFraction(profile, isGridView)
-        val secondLineWidthPx = (fullLineWidthPx * secondLineWidthFraction).roundToInt().coerceAtLeast(0)
-        val words = normalizedName.split(" ").filter { it.isNotBlank() }
-        val styleCandidates = buildStyleCandidates(hash = hash, profile = profile, isGridView = isGridView)
+                if (words.size > 1) {
+                    val bestBreak = findBestBreak(
+                        words = words,
+                        style = style,
+                        firstLineWidthPx = fullLineWidthPx,
+                        secondLineWidthPx = secondLineWidthPx,
+                        textMeasurer = textMeasurer,
+                        allowSecondLineOverflow = false
+                    )
 
-        styleCandidates.forEach { style ->
-            if (fitsSingleLine(normalizedName, style, fullLineWidthPx, textMeasurer)) {
-                return TitlePresentation(
-                    firstLine = normalizedName,
-                    secondLine = null,
-                    style = style,
-                    secondLineWidthFraction = secondLineWidthFraction
-                ).also { putCachedTitlePresentation(cacheKey, it) }
+                    if (bestBreak != null) {
+                        return@getOrPutCachedTitlePresentation TitlePresentation(
+                            firstLine = bestBreak.firstLine,
+                            secondLine = bestBreak.secondLine,
+                            style = style,
+                            secondLineWidthFraction = secondLineWidthFraction
+                        )
+                    }
+                }
             }
 
-            if (words.size > 1) {
-                val bestBreak = findBestBreak(
+            val fallbackStyle = styleCandidates.last()
+            val fallbackBreak = if (words.size > 1) {
+                findBestBreak(
                     words = words,
-                    style = style,
+                    style = fallbackStyle,
                     firstLineWidthPx = fullLineWidthPx,
                     secondLineWidthPx = secondLineWidthPx,
                     textMeasurer = textMeasurer,
-                    allowSecondLineOverflow = false
+                    allowSecondLineOverflow = true
                 )
-
-                if (bestBreak != null) {
-                    return TitlePresentation(
-                        firstLine = bestBreak.firstLine,
-                        secondLine = bestBreak.secondLine,
-                        style = style,
-                        secondLineWidthFraction = secondLineWidthFraction
-                    ).also { putCachedTitlePresentation(cacheKey, it) }
-                }
+            } else {
+                null
             }
-        }
 
-        val fallbackStyle = styleCandidates.last()
-        val fallbackBreak = if (words.size > 1) {
-            findBestBreak(
-                words = words,
+            TitlePresentation(
+                firstLine = fallbackBreak?.firstLine ?: normalizedName,
+                secondLine = fallbackBreak?.secondLine,
                 style = fallbackStyle,
-                firstLineWidthPx = fullLineWidthPx,
-                secondLineWidthPx = secondLineWidthPx,
-                textMeasurer = textMeasurer,
-                allowSecondLineOverflow = true
+                secondLineWidthFraction = secondLineWidthFraction
             )
-        } else {
-            null
         }
-
-        return TitlePresentation(
-            firstLine = fallbackBreak?.firstLine ?: normalizedName,
-            secondLine = fallbackBreak?.secondLine,
-            style = fallbackStyle,
-            secondLineWidthFraction = secondLineWidthFraction
-        ).also { putCachedTitlePresentation(cacheKey, it) }
     }
 
     @OptIn(ExperimentalTextApi::class)
@@ -413,20 +417,12 @@ object GenreTypography {
         return (normalized - 0.5f) * span
     }
 
-    @Synchronized
-    private fun getCachedTitlePresentation(key: TitleCacheKey): TitlePresentation? {
-        return titlePresentationCache[key]
-    }
-
-    @Synchronized
-    private fun putCachedTitlePresentation(key: TitleCacheKey, value: TitlePresentation) {
-        titlePresentationCache[key] = value
-        if (titlePresentationCache.size > TITLE_PRESENTATION_CACHE_LIMIT) {
-            val iterator = titlePresentationCache.entries.iterator()
-            if (iterator.hasNext()) {
-                iterator.next()
-                iterator.remove()
-            }
+    private inline fun getOrPutCachedTitlePresentation(
+        key: TitleCacheKey,
+        computeValue: () -> TitlePresentation
+    ): TitlePresentation {
+        return synchronized(titlePresentationCache) {
+            titlePresentationCache[key] ?: computeValue().also { titlePresentationCache[key] = it }
         }
     }
 
