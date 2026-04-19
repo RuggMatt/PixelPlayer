@@ -221,7 +221,7 @@ fun SetupScreen(
     val directorySelectionPageIndex = remember(pages) { pages.indexOf(SetupPage.DirectorySelection) }
     val batteryOptimizationPageIndex = remember(pages) { pages.indexOf(SetupPage.BatteryOptimization) }
     val finishPageIndex = remember(pages) { pages.indexOf(SetupPage.Finish) }
-    val completeSetup = remember(setupViewModel) { { setupViewModel.setSetupComplete() } }
+    val completeSetup: () -> Unit = remember(setupViewModel) { setupViewModel::setSetupComplete }
 
     LaunchedEffect(uiState.mediaPermissionGranted) {
         if (uiState.mediaPermissionGranted || hasMediaPermissionNow(context)) {
@@ -569,7 +569,7 @@ private fun isPermissionGateSatisfied(
     uiState: SetupUiState
 ): Boolean {
     return when (page) {
-        SetupPage.MediaPermission -> uiState.mediaPermissionGranted || hasMediaPermissionNow(context)
+        SetupPage.MediaPermission -> true
         else -> true
     }
 }

@@ -387,18 +387,17 @@ class SetupViewModel @Inject constructor(
         }.first()
         if (currentAllowed.isNotEmpty() || currentBlocked.isNotEmpty()) return
 
-        // Uses legacy external root path API intentionally because directory rules are
-        // absolute filesystem paths and this remains the stable root used across the app.
-        // Scoped storage still limits access by permission/rules; these paths only define
-        // logical include/exclude roots for the resolver.
+        // Uses the legacy external root path API intentionally:
+        // 1) these paths are only logical filter roots (not direct unrestricted file access),
+        // 2) actual media access still goes through platform-scoped APIs/permissions.
         @Suppress("DEPRECATION")
         val externalRootPath = Environment.getExternalStorageDirectory().absolutePath
         val musicPath = File(externalRootPath, "Music").absolutePath
         val androidPath = File(externalRootPath, "Android").absolutePath
         val ringtonesPath = File(externalRootPath, "Ringtones").absolutePath
 
-        // Block broad roots but explicitly allow Music (see DirectoryRuleResolver.isBlocked:
-        // the deepest/specific matching rule wins).
+        // Music allowlist takes precedence over the broader root blocklist because
+        // DirectoryRuleResolver chooses the most specific matching path rule.
         userPreferencesRepository.updateDirectorySelections(
             allowedPaths = setOf(musicPath),
             blockedPaths = setOf(externalRootPath, androidPath, ringtonesPath)
