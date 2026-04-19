@@ -1199,9 +1199,10 @@ constructor(
         if (hasMediaPermission) return allowedDirs to blockedDirs
 
         val externalRootPath = Environment.getExternalStorageDirectory().absolutePath
-        val mediaFolderPath = File(externalRootPath, "Android/media").absolutePath
+        val mediaFolderPath = File(externalRootPath, ANDROID_MEDIA_RELATIVE_PATH).absolutePath
         // Block the broad external root and explicitly allow Android/media so
         // DirectoryRuleResolver's longest-match precedence keeps the scan limited.
+        // If the folder doesn't exist yet, this simply resolves to no local matches.
         return setOf(mediaFolderPath) to (blockedDirs + externalRootPath)
     }
 
@@ -1347,6 +1348,7 @@ constructor(
         private const val NETEASE_ARTIST_ID_OFFSET = 5_000_000_000_000L
         private const val NETEASE_PARENT_DIRECTORY = "/Cloud/Netease"
         private const val NETEASE_GENRE = "Netease Cloud"
+        private const val ANDROID_MEDIA_RELATIVE_PATH = "Android/media"
 
         // Genre cache - shared across worker instances to avoid refetching on incremental syncs
         private const val GENRE_CACHE_TTL_MS = 60 * 60 * 1000L // 1 hour

@@ -211,7 +211,7 @@ fun SetupScreen(
 
     val pagerState = rememberPagerState(pageCount = { pages.size })
     val scope = rememberCoroutineScope()
-    val currentPage = pages.getOrElse(pagerState.currentPage) { pages.last() }
+    val currentPage = pages[pagerState.currentPage]
     val isNextButtonEnabled = isPermissionGateSatisfied(context, currentPage, uiState)
     var previousPageIndex by remember { mutableStateOf(0) }
     val navigateToPage: (Int) -> Unit = { targetPage ->
@@ -288,7 +288,7 @@ fun SetupScreen(
                 isNextButtonEnabled = isNextButtonEnabled,
                 isFinishButtonEnabled = allRequiredPermissionsGrantedNow(context),
                 onNextClicked = {
-                    val page = pages.getOrElse(pagerState.currentPage) { pages.last() }
+                    val page = pages[pagerState.currentPage]
                     if (isPermissionGateSatisfied(context, page, uiState)) {
                         navigateToPage(pagerState.currentPage + 1)
                     } else {
@@ -808,7 +808,7 @@ fun MediaPermissionPage(
     ) {
         if (!isGranted) {
             TextButton(onClick = onSkip) {
-                Text("Continue with media folder only")
+                Text("Continue without full access")
             }
         }
     )
