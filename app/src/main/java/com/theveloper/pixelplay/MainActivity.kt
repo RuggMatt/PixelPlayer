@@ -214,7 +214,7 @@ class MainActivity : ComponentActivity() {
             
             // Permissions Logic
             val permissions = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                listOf(Manifest.permission.POST_NOTIFICATIONS)
+                emptyList()
             } else {
                 emptyList()
             }

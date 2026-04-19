@@ -370,10 +370,6 @@ fun SetupScreen(
                         onSelectionFinished = setupViewModel::applyPendingDirectoryRuleChanges,
                         onStorageSelected = setupViewModel::selectStorage
                     )
-                    SetupPage.NotificationsPermission -> NotificationsPermissionPage(
-                        uiState = uiState,
-                        onPermissionStateUpdated = { setupViewModel.checkPermissions(context) }
-                    )
                     SetupPage.AlarmsPermission -> AlarmsPermissionPage(
                         uiState = uiState,
                         onSkip = {
@@ -547,7 +543,6 @@ sealed class SetupPage {
     object BackupRestore : SetupPage()
     object DirectorySelection : SetupPage()
     object ThemeSelection : SetupPage()
-    object NotificationsPermission : SetupPage()
     object AlarmsPermission : SetupPage()
     object LibraryLayout : SetupPage()
     object NavBarLayout : SetupPage()
@@ -557,16 +552,12 @@ sealed class SetupPage {
 
 internal fun buildSetupPages(
     sdkInt: Int,
-    includeDirectorySelection: Boolean
+    includeDirectorySelection: Boolean = true
 ): List<SetupPage> {
     val pages = mutableListOf<SetupPage>(
         SetupPage.Welcome,
         SetupPage.MediaPermission
     )
-
-    if (sdkInt >= Build.VERSION_CODES.TIRAMISU) {
-        pages += SetupPage.NotificationsPermission
-    }
 
     pages += SetupPage.BackupRestore
     if (includeDirectorySelection) {
@@ -606,26 +597,12 @@ private fun isPermissionGateSatisfied(
     return when (page) {
         // Optional by design: users can continue setup without granting broad storage access.
         SetupPage.MediaPermission -> true
-        SetupPage.NotificationsPermission -> {
-            uiState.notificationsPermissionGranted ||
-                Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
-                ContextCompat.checkSelfPermission(
-                    context,
-                    Manifest.permission.POST_NOTIFICATIONS
-                ) == PackageManager.PERMISSION_GRANTED
-        }
         else -> true
     }
 }
 
 private fun allRequiredPermissionsGrantedNow(context: Context): Boolean {
-    val notificationsGranted =
-        Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
-            ContextCompat.checkSelfPermission(
-                context,
-                Manifest.permission.POST_NOTIFICATIONS
-            ) == PackageManager.PERMISSION_GRANTED
-    return notificationsGranted
+    return true
 }
 
 private fun hasMediaPermissionNow(context: Context): Boolean {
@@ -809,45 +786,6 @@ fun MediaPermissionPage(
         if (!isGranted) {
             TextButton(onClick = onSkip) {
                 Text("Continue without full access")
-            }
-        }
-    )
-}
-
-@OptIn(ExperimentalPermissionsApi::class)
-@Composable
-fun NotificationsPermissionPage(
-    uiState: SetupUiState,
-    onPermissionStateUpdated: () -> Unit
-) {
-    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return
-
-    val permissionState = rememberMultiplePermissionsState(permissions = listOf(Manifest.permission.POST_NOTIFICATIONS))
-    val notificationIcons = persistentListOf(
-        R.drawable.rounded_circle_notifications_24,
-        R.drawable.rounded_skip_next_24,
-        R.drawable.rounded_play_arrow_24,
-        R.drawable.rounded_pause_24,
-        R.drawable.rounded_skip_previous_24
-    )
-
-    // Sync the granted state with the ViewModel
-    val isGranted = uiState.notificationsPermissionGranted || permissionState.allPermissionsGranted
-
-    LaunchedEffect(permissionState.allPermissionsGranted) {
-        onPermissionStateUpdated()
-    }
-
-    PermissionPageLayout(
-        title = "Notifications",
-        granted = isGranted,
-        description = "Enable notifications to control your music from the lock screen and notification shade.",
-        buttonText = if (isGranted) "Permission Granted" else "Enable Notifications",
-        buttonEnabled = !isGranted,
-        icons = notificationIcons,
-        onGrantClicked = {
-            if (!isGranted) {
-                permissionState.launchMultiplePermissionRequest()
             }
         }
     )
