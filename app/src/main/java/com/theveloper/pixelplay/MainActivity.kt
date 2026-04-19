@@ -974,7 +974,7 @@ class MainActivity : ComponentActivity() {
                         CircularWavyProgressIndicator(modifier = Modifier.height(48.dp))
                     }
                     Text(
-                        text = if (syncProgress.hasProgress) "${(clampedAnimatedProgress * 100).toInt()}%" else "…",
+                        text = if (syncProgress.hasProgress) "${(clampedAnimatedProgress * 100).toInt()}%" else "...",
                         style = MaterialTheme.typography.labelMedium
                     )
                 }
