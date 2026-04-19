@@ -229,33 +229,50 @@ constructor(
                                         if (syncMode != SyncMode.REBUILD && provisionalSongs.isNotEmpty()) {
                                             val provisionalArtists =
                                                     provisionalSongs
-                                                            .distinctBy { it.artistId }
-                                                            .map { song ->
+                                                            .groupBy { it.artistId }
+                                                            .map { (artistId, songsForArtist) ->
+                                                                val representative =
+                                                                        songsForArtist
+                                                                                .firstOrNull {
+                                                                                    it.artistName
+                                                                                            .isNotBlank()
+                                                                                }
+                                                                                ?: songsForArtist.first()
                                                                 ArtistEntity(
-                                                                        id = song.artistId,
-                                                                        name = song.artistName,
+                                                                        id = artistId,
+                                                                        name = representative.artistName,
                                                                         trackCount = 0
                                                                 )
                                                             }
                                             val provisionalAlbums =
                                                     provisionalSongs
-                                                            .distinctBy { it.albumId }
-                                                            .map { song ->
+                                                            .groupBy { it.albumId }
+                                                            .map { (albumId, songsForAlbum) ->
+                                                                val representative =
+                                                                        songsForAlbum.maxByOrNull {
+                                                                            var score = 0
+                                                                            if (it.albumName.isNotBlank()) score += 4
+                                                                            if (!it.albumArtist.isNullOrBlank()) score += 2
+                                                                            if (!it.albumArtUriString.isNullOrBlank()) score +=
+                                                                                    2
+                                                                            if (it.year > 0) score += 1
+                                                                            score
+                                                                        } ?: songsForAlbum.first()
                                                                 AlbumEntity(
-                                                                        id = song.albumId,
-                                                                        title = song.albumName,
+                                                                        id = albumId,
+                                                                        title = representative.albumName,
                                                                         artistName =
-                                                                                song.albumArtist
-                                                                                        ?: song.artistName,
-                                                                        artistId = song.artistId,
+                                                                                representative.albumArtist
+                                                                                        ?: representative.artistName,
+                                                                        artistId = representative.artistId,
                                                                         albumArtUriString =
-                                                                                song.albumArtUriString,
+                                                                                representative.albumArtUriString,
                                                                         songCount = 0,
-                                                                        dateAdded = song.dateAdded,
-                                                                        year = song.year
+                                                                        dateAdded = representative.dateAdded,
+                                                                        year = representative.year
                                                                 )
                                                             }
-                                            musicDao.insertMusicData(
+                                            musicDao.insertMusicDataWithIgnoredParentConflicts(
                                                     songs = provisionalSongs,
                                                     albums = provisionalAlbums,
                                                     artists = provisionalArtists

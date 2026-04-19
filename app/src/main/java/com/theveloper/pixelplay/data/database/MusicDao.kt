@@ -138,6 +138,22 @@ interface MusicDao {
     }
 
     @Transaction
+    suspend fun insertMusicDataWithIgnoredParentConflicts(
+        songs: List<SongEntity>,
+        albums: List<AlbumEntity>,
+        artists: List<ArtistEntity>
+    ) {
+        if (songs.isEmpty()) return
+        if (artists.isNotEmpty()) {
+            insertArtistsIgnoreConflicts(artists)
+        }
+        if (albums.isNotEmpty()) {
+            insertAlbumsIgnoreConflicts(albums)
+        }
+        insertSongs(songs)
+    }
+
+    @Transaction
     suspend fun clearAllMusicData() {
         clearAllSongs()
         clearAllAlbums()
