@@ -1004,7 +1004,7 @@ class MainActivity : ComponentActivity() {
                         if (syncProgress.hasProgress) {
                             Spacer(modifier = Modifier.height(4.dp))
                             Text(
-                                text = "Saving ${syncProgress.currentCount} of ${syncProgress.totalCount} songs",
+                                text = "${syncProgress.phase.progressActionLabel()} ${syncProgress.currentCount} of ${syncProgress.totalCount} songs",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -1026,6 +1026,15 @@ class MainActivity : ComponentActivity() {
         SyncProgress.SyncPhase.SAVING_TO_DATABASE -> "Importing songs"
         SyncProgress.SyncPhase.SCANNING_LRC -> "Scanning lyrics"
         SyncProgress.SyncPhase.COMPLETING -> "Finalizing"
+    }
+
+    private fun SyncProgress.SyncPhase.progressActionLabel(): String = when (this) {
+        SyncProgress.SyncPhase.FETCHING_MEDIASTORE -> "Scanning"
+        SyncProgress.SyncPhase.PROCESSING_FILES -> "Processing"
+        SyncProgress.SyncPhase.SAVING_TO_DATABASE -> "Saving"
+        SyncProgress.SyncPhase.SCANNING_LRC -> "Scanning"
+        SyncProgress.SyncPhase.COMPLETING -> "Finalizing"
+        SyncProgress.SyncPhase.IDLE -> "Processing"
     }
 
 
