@@ -201,10 +201,8 @@ fun SetupScreen(
         }
     }
 
-    val pages = remember(Build.VERSION.SDK_INT) {
-        buildSetupPages(
-            sdkInt = Build.VERSION.SDK_INT
-        )
+    val pages = remember {
+        buildSetupPages()
     }
 
     val pagerState = rememberPagerState(pageCount = { pages.size })
@@ -552,10 +550,7 @@ sealed class SetupPage {
     object Finish : SetupPage()
 }
 
-internal fun buildSetupPages(
-    @Suppress("UNUSED_PARAMETER") sdkInt: Int,
-    @Suppress("UNUSED_PARAMETER") includeDirectorySelection: Boolean = true
-): List<SetupPage> {
+internal fun buildSetupPages(): List<SetupPage> {
     return listOf(SetupPage.MediaPermission)
 }
 
