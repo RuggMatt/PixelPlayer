@@ -35,7 +35,6 @@ import java.io.File
 
 data class SetupUiState(
     val mediaPermissionGranted: Boolean = false,
-    val notificationsPermissionGranted: Boolean = false,
     val isLoadingDirectories: Boolean = false,
     val blockedDirectories: Set<String> = emptySet(),
     val libraryNavigationMode: String = "tab_row",
@@ -49,11 +48,7 @@ data class SetupUiState(
     val backupTransferProgress: BackupTransferProgressUpdate? = null
 ) {
     val allPermissionsGranted: Boolean
-        get() {
-            val mediaOk = mediaPermissionGranted
-            val notificationsOk = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) notificationsPermissionGranted else true
-            return mediaOk && notificationsOk
-        }
+        get() = mediaPermissionGranted
 }
 
 sealed interface SetupEvent {
@@ -150,12 +145,6 @@ class SetupViewModel @Inject constructor(
             ContextCompat.checkSelfPermission(context, Manifest.permission.READ_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED
         }
 
-        val notificationsPermissionGranted = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
-        } else {
-            true // Not required before Android 13 (Tiramisu)
-        }
-
         val alarmsPermissionGranted = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as android.app.AlarmManager
             alarmManager.canScheduleExactAlarms()
@@ -166,7 +155,6 @@ class SetupViewModel @Inject constructor(
         _uiState.update {
             it.copy(
                 mediaPermissionGranted = mediaPermissionGranted,
-                notificationsPermissionGranted = notificationsPermissionGranted,
                 alarmsPermissionGranted = alarmsPermissionGranted
             )
         }

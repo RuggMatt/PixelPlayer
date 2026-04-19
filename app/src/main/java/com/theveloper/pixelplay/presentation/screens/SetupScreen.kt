@@ -363,10 +363,6 @@ fun SetupScreen(
                         onSelectionFinished = setupViewModel::applyPendingDirectoryRuleChanges,
                         onStorageSelected = setupViewModel::selectStorage
                     )
-                    SetupPage.NotificationsPermission -> NotificationsPermissionPage(
-                        uiState = uiState,
-                        onPermissionStateUpdated = { setupViewModel.checkPermissions(context) }
-                    )
                     SetupPage.AlarmsPermission -> AlarmsPermissionPage(
                         uiState = uiState,
                         onSkip = {
@@ -540,7 +536,6 @@ sealed class SetupPage {
     object BackupRestore : SetupPage()
     object DirectorySelection : SetupPage()
     object ThemeSelection : SetupPage()
-    object NotificationsPermission : SetupPage()
     object AlarmsPermission : SetupPage()
     object LibraryLayout : SetupPage()
     object NavBarLayout : SetupPage()
@@ -548,15 +543,11 @@ sealed class SetupPage {
     object Finish : SetupPage()
 }
 
-private fun buildSetupPages(sdkInt: Int): List<SetupPage> {
+internal fun buildSetupPages(sdkInt: Int): List<SetupPage> {
     val pages = mutableListOf<SetupPage>(
         SetupPage.Welcome,
         SetupPage.MediaPermission
     )
-
-    if (sdkInt >= Build.VERSION_CODES.TIRAMISU) {
-        pages += SetupPage.NotificationsPermission
-    }
 
     pages += SetupPage.BackupRestore
     pages += SetupPage.DirectorySelection
@@ -595,27 +586,12 @@ private fun isPermissionGateSatisfied(
         SetupPage.MediaPermission -> {
             uiState.mediaPermissionGranted || hasMediaPermissionNow(context)
         }
-        SetupPage.NotificationsPermission -> {
-            uiState.notificationsPermissionGranted ||
-                Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
-                ContextCompat.checkSelfPermission(
-                    context,
-                    Manifest.permission.POST_NOTIFICATIONS
-                ) == PackageManager.PERMISSION_GRANTED
-        }
         else -> true
     }
 }
 
 private fun allRequiredPermissionsGrantedNow(context: Context): Boolean {
-    val mediaGranted = hasMediaPermissionNow(context)
-    val notificationsGranted =
-        Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
-            ContextCompat.checkSelfPermission(
-                context,
-                Manifest.permission.POST_NOTIFICATIONS
-            ) == PackageManager.PERMISSION_GRANTED
-    return mediaGranted && notificationsGranted
+    return hasMediaPermissionNow(context)
 }
 
 private fun hasMediaPermissionNow(context: Context): Boolean {
@@ -789,45 +765,6 @@ fun MediaPermissionPage(
         buttonText = if (isGranted) "Permission Granted" else "Grant Media Permission",
         buttonEnabled = !isGranted,
         icons = mediaIcons,
-        onGrantClicked = {
-            if (!isGranted) {
-                permissionState.launchMultiplePermissionRequest()
-            }
-        }
-    )
-}
-
-@OptIn(ExperimentalPermissionsApi::class)
-@Composable
-fun NotificationsPermissionPage(
-    uiState: SetupUiState,
-    onPermissionStateUpdated: () -> Unit
-) {
-    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return
-
-    val permissionState = rememberMultiplePermissionsState(permissions = listOf(Manifest.permission.POST_NOTIFICATIONS))
-    val notificationIcons = persistentListOf(
-        R.drawable.rounded_circle_notifications_24,
-        R.drawable.rounded_skip_next_24,
-        R.drawable.rounded_play_arrow_24,
-        R.drawable.rounded_pause_24,
-        R.drawable.rounded_skip_previous_24
-    )
-
-    // Sync the granted state with the ViewModel
-    val isGranted = uiState.notificationsPermissionGranted || permissionState.allPermissionsGranted
-
-    LaunchedEffect(permissionState.allPermissionsGranted) {
-        onPermissionStateUpdated()
-    }
-
-    PermissionPageLayout(
-        title = "Notifications",
-        granted = isGranted,
-        description = "Enable notifications to control your music from the lock screen and notification shade.",
-        buttonText = if (isGranted) "Permission Granted" else "Enable Notifications",
-        buttonEnabled = !isGranted,
-        icons = notificationIcons,
         onGrantClicked = {
             if (!isGranted) {
                 permissionState.launchMultiplePermissionRequest()
