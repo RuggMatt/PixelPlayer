@@ -227,7 +227,41 @@ constructor(
                                     },
                                     onSongsBatchReady = { provisionalSongs ->
                                         if (syncMode != SyncMode.REBUILD && provisionalSongs.isNotEmpty()) {
-                                            musicDao.insertSongs(provisionalSongs)
+                                            val provisionalArtists =
+                                                    provisionalSongs
+                                                            .associateBy { it.artistId }
+                                                            .values
+                                                            .map { song ->
+                                                                ArtistEntity(
+                                                                        id = song.artistId,
+                                                                        name = song.artistName,
+                                                                        trackCount = 0
+                                                                )
+                                                            }
+                                            val provisionalAlbums =
+                                                    provisionalSongs
+                                                            .associateBy { it.albumId }
+                                                            .values
+                                                            .map { song ->
+                                                                AlbumEntity(
+                                                                        id = song.albumId,
+                                                                        title = song.albumName,
+                                                                        artistName =
+                                                                                song.albumArtist
+                                                                                        ?: song.artistName,
+                                                                        artistId = song.artistId,
+                                                                        albumArtUriString =
+                                                                                song.albumArtUriString,
+                                                                        songCount = 0,
+                                                                        dateAdded = song.dateAdded,
+                                                                        year = song.year
+                                                                )
+                                                            }
+                                            musicDao.insertMusicData(
+                                                    songs = provisionalSongs,
+                                                    albums = provisionalAlbums,
+                                                    artists = provisionalArtists
+                                            )
                                         }
                                     }
                             )
