@@ -17,6 +17,7 @@ import kotlin.math.absoluteValue
 import kotlin.math.roundToInt
 
 object GenreTypography {
+    private val whitespaceRegex = Regex("\\s+")
 
     data class TitlePresentation(
         val firstLine: String,
@@ -24,6 +25,26 @@ object GenreTypography {
         val style: TextStyle,
         val secondLineWidthFraction: Float
     )
+
+    private data class TitleCacheKey(
+        val genreId: String,
+        val normalizedGenreName: String,
+        val isGridView: Boolean,
+        val cardWidthPx: Int,
+        val horizontalPaddingPx: Int
+    )
+
+    // 256 entries comfortably covers all genre cards across grid/list widths and common font-scale variations.
+    private const val TITLE_PRESENTATION_CACHE_LIMIT = 256
+    private val titlePresentationCache = object : LinkedHashMap<TitleCacheKey, TitlePresentation>(
+        TITLE_PRESENTATION_CACHE_LIMIT,
+        0.75f,
+        true
+    ) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<TitleCacheKey, TitlePresentation>?): Boolean {
+            return size > TITLE_PRESENTATION_CACHE_LIMIT
+        }
+    }
 
     @OptIn(ExperimentalTextApi::class)
     fun resolveTitlePresentation(
@@ -34,71 +55,80 @@ object GenreTypography {
         horizontalPaddingPx: Int,
         textMeasurer: TextMeasurer
     ): TitlePresentation {
-        val normalizedName = genreName.trim().replace(Regex("\\s+"), " ")
-        val profile = GenreTitleProfile.from(normalizedName)
-        val hash = genreId.hashCode().toLong().absoluteValue
-        val fullLineWidthPx = (cardWidthPx - (horizontalPaddingPx * 2)).coerceAtLeast(0)
-        val secondLineWidthFraction = secondLineWidthFraction(profile, isGridView)
-        val secondLineWidthPx = (fullLineWidthPx * secondLineWidthFraction).roundToInt().coerceAtLeast(0)
-        val words = normalizedName.split(" ").filter { it.isNotBlank() }
-        val styleCandidates = buildStyleCandidates(hash = hash, profile = profile, isGridView = isGridView)
+        val normalizedName = genreName.trim().replace(whitespaceRegex, " ")
+        val cacheKey = TitleCacheKey(
+            genreId = genreId,
+            normalizedGenreName = normalizedName,
+            isGridView = isGridView,
+            cardWidthPx = cardWidthPx,
+            horizontalPaddingPx = horizontalPaddingPx
+        )
+        return getOrPutCachedTitlePresentation(cacheKey) {
+            val profile = GenreTitleProfile.from(normalizedName)
+            val hash = genreId.hashCode().toLong().absoluteValue
+            val fullLineWidthPx = (cardWidthPx - (horizontalPaddingPx * 2)).coerceAtLeast(0)
+            val secondLineWidthFraction = secondLineWidthFraction(profile, isGridView)
+            val secondLineWidthPx = (fullLineWidthPx * secondLineWidthFraction).roundToInt().coerceAtLeast(0)
+            val words = normalizedName.split(" ").filter { it.isNotBlank() }
+            val styleCandidates = buildStyleCandidates(hash = hash, profile = profile, isGridView = isGridView)
 
-        styleCandidates.forEach { style ->
-            if (fitsSingleLine(normalizedName, style, fullLineWidthPx, textMeasurer)) {
-                return TitlePresentation(
-                    firstLine = normalizedName,
-                    secondLine = null,
-                    style = style,
-                    secondLineWidthFraction = secondLineWidthFraction
-                )
-            }
-
-            if (words.size > 1) {
-                val bestBreak = findBestBreak(
-                    words = words,
-                    style = style,
-                    firstLineWidthPx = fullLineWidthPx,
-                    secondLineWidthPx = secondLineWidthPx,
-                    textMeasurer = textMeasurer,
-                    allowSecondLineOverflow = false
-                )
-
-                if (bestBreak != null) {
-                    return TitlePresentation(
-                        firstLine = bestBreak.firstLine,
-                        secondLine = bestBreak.secondLine,
+            styleCandidates.forEach { style ->
+                if (fitsSingleLine(normalizedName, style, fullLineWidthPx, textMeasurer)) {
+                    return@getOrPutCachedTitlePresentation TitlePresentation(
+                        firstLine = normalizedName,
+                        secondLine = null,
                         style = style,
                         secondLineWidthFraction = secondLineWidthFraction
                     )
                 }
+
+                if (words.size > 1) {
+                    val bestBreak = findBestBreak(
+                        words = words,
+                        style = style,
+                        firstLineWidthPx = fullLineWidthPx,
+                        secondLineWidthPx = secondLineWidthPx,
+                        textMeasurer = textMeasurer,
+                        allowSecondLineOverflow = false
+                    )
+
+                    if (bestBreak != null) {
+                        return@getOrPutCachedTitlePresentation TitlePresentation(
+                            firstLine = bestBreak.firstLine,
+                            secondLine = bestBreak.secondLine,
+                            style = style,
+                            secondLineWidthFraction = secondLineWidthFraction
+                        )
+                    }
+                }
             }
-        }
 
-        val fallbackStyle = styleCandidates.last()
-        val fallbackBreak = if (words.size > 1) {
-            findBestBreak(
-                words = words,
+            val fallbackStyle = styleCandidates.last()
+            val fallbackBreak = if (words.size > 1) {
+                findBestBreak(
+                    words = words,
+                    style = fallbackStyle,
+                    firstLineWidthPx = fullLineWidthPx,
+                    secondLineWidthPx = secondLineWidthPx,
+                    textMeasurer = textMeasurer,
+                    allowSecondLineOverflow = true
+                )
+            } else {
+                null
+            }
+
+            TitlePresentation(
+                firstLine = fallbackBreak?.firstLine ?: normalizedName,
+                secondLine = fallbackBreak?.secondLine,
                 style = fallbackStyle,
-                firstLineWidthPx = fullLineWidthPx,
-                secondLineWidthPx = secondLineWidthPx,
-                textMeasurer = textMeasurer,
-                allowSecondLineOverflow = true
+                secondLineWidthFraction = secondLineWidthFraction
             )
-        } else {
-            null
         }
-
-        return TitlePresentation(
-            firstLine = fallbackBreak?.firstLine ?: normalizedName,
-            secondLine = fallbackBreak?.secondLine,
-            style = fallbackStyle,
-            secondLineWidthFraction = secondLineWidthFraction
-        )
     }
 
     @OptIn(ExperimentalTextApi::class)
     fun getGenreStyle(genreId: String, genreName: String): TextStyle {
-        val normalizedName = genreName.trim().replace(Regex("\\s+"), " ")
+        val normalizedName = genreName.trim().replace(whitespaceRegex, " ")
         val profile = GenreTitleProfile.from(normalizedName)
         val hash = genreId.hashCode().toLong().absoluteValue
         return buildStyleCandidates(hash = hash, profile = profile, isGridView = true).first()
@@ -385,6 +415,15 @@ object GenreTypography {
     private fun axisJitter(hash: Long, divisor: Long, span: Float): Float {
         val normalized = ((hash / divisor) % 1000).toFloat() / 999f
         return (normalized - 0.5f) * span
+    }
+
+    private inline fun getOrPutCachedTitlePresentation(
+        key: TitleCacheKey,
+        computeValue: () -> TitlePresentation
+    ): TitlePresentation {
+        return synchronized(titlePresentationCache) {
+            titlePresentationCache[key] ?: computeValue().also { titlePresentationCache[key] = it }
+        }
     }
 
     private data class BreakCandidate(
