@@ -28,8 +28,8 @@ class SetupScreenTest {
     }
 
     @Test
-    fun `buildSetupPages includes alarms page on android 12`() {
-        val pages = buildSetupPages(Build.VERSION_CODES.S)
+    fun `buildSetupPages excludes alarms page below android 12`() {
+        val pages = buildSetupPages(Build.VERSION_CODES.R)
 
         assertEquals(
             listOf(
@@ -40,7 +40,6 @@ class SetupScreenTest {
                 SetupPage.ThemeSelection,
                 SetupPage.LibraryLayout,
                 SetupPage.NavBarLayout,
-                SetupPage.AlarmsPermission,
                 SetupPage.BatteryOptimization,
                 SetupPage.Finish
             ),
