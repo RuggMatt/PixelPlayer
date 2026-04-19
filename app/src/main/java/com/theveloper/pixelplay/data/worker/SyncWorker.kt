@@ -1,14 +1,17 @@
 package com.theveloper.pixelplay.data.worker
 
+import android.Manifest
 import android.content.ContentResolver
 import android.content.ContentUris
 import android.content.Context
+import android.content.pm.PackageManager
 import android.media.MediaScannerConnection
 import android.os.Environment
 import android.os.Build
 import android.os.Trace // Import Trace
 import android.provider.MediaStore
 import android.util.Log
+import androidx.core.content.ContextCompat
 import androidx.hilt.work.HiltWorker
 import androidx.work.CoroutineWorker
 import androidx.work.OneTimeWorkRequestBuilder
@@ -110,7 +113,15 @@ constructor(
                     // Feature: Directory Filtering
                     val allowedDirs = userPreferencesRepository.allowedDirectoriesFlow.first()
                     val blockedDirs = userPreferencesRepository.blockedDirectoriesFlow.first()
-                    val directoryResolver = DirectoryRuleResolver(allowedDirs, blockedDirs)
+                    val (effectiveAllowedDirs, effectiveBlockedDirs) =
+                        buildEffectiveDirectoryRules(
+                            allowedDirs = allowedDirs,
+                            blockedDirs = blockedDirs,
+                            hasMediaPermission = hasMediaReadPermission()
+                        )
+                    val directoryResolver =
+                        DirectoryRuleResolver(effectiveAllowedDirs, effectiveBlockedDirs)
+                    val explicitAllowedRoots = effectiveAllowedDirs.map(::File).toSet()
                     
                     var lastSyncTimestamp = userPreferencesRepository.getLastSyncTimestamp()
 
@@ -138,7 +149,10 @@ constructor(
                     val shouldRunMediaScan = forceFilesystemScan || 
                             (lastSyncTimestamp > 0L && timeSinceLastScan >= mediaScanCooldownMs)
                     if (shouldRunMediaScan) {
-                        triggerMediaScanForNewFiles(directoryResolver)
+                        triggerMediaScanForNewFiles(
+                            directoryResolver = directoryResolver,
+                            explicitAllowedRoots = explicitAllowedRoots
+                        )
                     } else {
                         Timber.tag(TAG).d(
                             "Skipping filesystem walk — forceMetadata=$forceMetadata, lastSyncTimestamp=${lastSyncTimestamp}"
@@ -1065,11 +1079,13 @@ constructor(
      * This is a fast, incremental scan optimized for pull-to-refresh.
      * It compares filesystem files with MediaStore entries and only scans the difference.
      */
-    private suspend fun triggerMediaScanForNewFiles(directoryResolver: DirectoryRuleResolver) {
+    private suspend fun triggerMediaScanForNewFiles(
+        directoryResolver: DirectoryRuleResolver,
+        explicitAllowedRoots: Set<File>
+    ) {
         withContext(Dispatchers.IO) {
             val externalRoot = Environment.getExternalStorageDirectory()
-            val allowedSet =
-                userPreferencesRepository.allowedDirectoriesFlow.first().map { File(it) }.toSet()
+            val allowedSet = explicitAllowedRoots
             Log.i(TAG, "Starting media scan for new files. Explicit includes: ${allowedSet.size}")
 
             // Get all file paths currently in MediaStore
@@ -1163,6 +1179,28 @@ constructor(
                 Log.i(TAG, "Media scan completed for ${newFilesToScan.size} new files")
             }
         }
+    }
+
+    private fun hasMediaReadPermission(): Boolean {
+        val mediaPermission = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            Manifest.permission.READ_MEDIA_AUDIO
+        } else {
+            Manifest.permission.READ_EXTERNAL_STORAGE
+        }
+        return ContextCompat.checkSelfPermission(applicationContext, mediaPermission) ==
+            PackageManager.PERMISSION_GRANTED
+    }
+
+    private fun buildEffectiveDirectoryRules(
+        allowedDirs: Set<String>,
+        blockedDirs: Set<String>,
+        hasMediaPermission: Boolean
+    ): Pair<Set<String>, Set<String>> {
+        if (hasMediaPermission) return allowedDirs to blockedDirs
+
+        val externalRootPath = Environment.getExternalStorageDirectory().absolutePath
+        val mediaFolderPath = File(externalRootPath, "Android/media").absolutePath
+        return setOf(mediaFolderPath) to (blockedDirs + externalRootPath)
     }
 
     private fun collectPreferredScanRoots(

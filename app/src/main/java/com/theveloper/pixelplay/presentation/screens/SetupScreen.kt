@@ -201,13 +201,17 @@ fun SetupScreen(
         }
     }
 
-    val pages = remember {
-        buildSetupPages(Build.VERSION.SDK_INT)
+    val canConfigureExcludedFolders = uiState.mediaPermissionGranted || hasMediaPermissionNow(context)
+    val pages = remember(Build.VERSION.SDK_INT, canConfigureExcludedFolders) {
+        buildSetupPages(
+            sdkInt = Build.VERSION.SDK_INT,
+            includeDirectorySelection = canConfigureExcludedFolders
+        )
     }
 
     val pagerState = rememberPagerState(pageCount = { pages.size })
     val scope = rememberCoroutineScope()
-    val currentPage = pages[pagerState.currentPage]
+    val currentPage = pages.getOrElse(pagerState.currentPage) { pages.last() }
     val isNextButtonEnabled = isPermissionGateSatisfied(context, currentPage, uiState)
     var previousPageIndex by remember { mutableStateOf(0) }
     val navigateToPage: (Int) -> Unit = { targetPage ->
@@ -282,9 +286,9 @@ fun SetupScreen(
                 pagerState = pagerState,
                 animated = (pagerState.currentPage != 0),
                 isNextButtonEnabled = isNextButtonEnabled,
-                isFinishButtonEnabled = uiState.allPermissionsGranted,
+                isFinishButtonEnabled = allRequiredPermissionsGrantedNow(context),
                 onNextClicked = {
-                    val page = pages[pagerState.currentPage]
+                    val page = pages.getOrElse(pagerState.currentPage) { pages.last() }
                     if (isPermissionGateSatisfied(context, page, uiState)) {
                         navigateToPage(pagerState.currentPage + 1)
                     } else {
@@ -329,7 +333,10 @@ fun SetupScreen(
                     SetupPage.Welcome -> WelcomePage()
                     SetupPage.MediaPermission -> MediaPermissionPage(
                         uiState = uiState,
-                        onPermissionStateUpdated = { setupViewModel.checkPermissions(context) }
+                        onPermissionStateUpdated = { setupViewModel.checkPermissions(context) },
+                        onSkip = {
+                            navigateToPage(pagerState.currentPage + 1)
+                        }
                     )
                     SetupPage.BackupRestore -> BackupRestorePage(
                         uiState = uiState,
@@ -548,7 +555,10 @@ sealed class SetupPage {
     object Finish : SetupPage()
 }
 
-private fun buildSetupPages(sdkInt: Int): List<SetupPage> {
+internal fun buildSetupPages(
+    sdkInt: Int,
+    includeDirectorySelection: Boolean
+): List<SetupPage> {
     val pages = mutableListOf<SetupPage>(
         SetupPage.Welcome,
         SetupPage.MediaPermission
@@ -559,7 +569,9 @@ private fun buildSetupPages(sdkInt: Int): List<SetupPage> {
     }
 
     pages += SetupPage.BackupRestore
-    pages += SetupPage.DirectorySelection
+    if (includeDirectorySelection) {
+        pages += SetupPage.DirectorySelection
+    }
     pages += SetupPage.ThemeSelection
     pages += SetupPage.LibraryLayout
     pages += SetupPage.NavBarLayout
@@ -592,9 +604,7 @@ private fun isPermissionGateSatisfied(
     uiState: SetupUiState
 ): Boolean {
     return when (page) {
-        SetupPage.MediaPermission -> {
-            uiState.mediaPermissionGranted || hasMediaPermissionNow(context)
-        }
+        SetupPage.MediaPermission -> true
         SetupPage.NotificationsPermission -> {
             uiState.notificationsPermissionGranted ||
                 Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
@@ -608,14 +618,13 @@ private fun isPermissionGateSatisfied(
 }
 
 private fun allRequiredPermissionsGrantedNow(context: Context): Boolean {
-    val mediaGranted = hasMediaPermissionNow(context)
     val notificationsGranted =
         Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
             ContextCompat.checkSelfPermission(
                 context,
                 Manifest.permission.POST_NOTIFICATIONS
             ) == PackageManager.PERMISSION_GRANTED
-    return mediaGranted && notificationsGranted
+    return notificationsGranted
 }
 
 private fun hasMediaPermissionNow(context: Context): Boolean {
@@ -759,7 +768,8 @@ fun WelcomePage() {
 @Composable
 fun MediaPermissionPage(
     uiState: SetupUiState,
-    onPermissionStateUpdated: () -> Unit
+    onPermissionStateUpdated: () -> Unit,
+    onSkip: () -> Unit
 ) {
     val permissions = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
         listOf(Manifest.permission.READ_MEDIA_AUDIO)
@@ -792,6 +802,12 @@ fun MediaPermissionPage(
         onGrantClicked = {
             if (!isGranted) {
                 permissionState.launchMultiplePermissionRequest()
+            }
+        }
+    ) {
+        if (!isGranted) {
+            TextButton(onClick = onSkip) {
+                Text("Continue with media folder only")
             }
         }
     )

@@ -214,9 +214,9 @@ class MainActivity : ComponentActivity() {
             
             // Permissions Logic
             val permissions = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                listOf(Manifest.permission.READ_MEDIA_AUDIO, Manifest.permission.POST_NOTIFICATIONS)
+                listOf(Manifest.permission.POST_NOTIFICATIONS)
             } else {
-                listOf(Manifest.permission.READ_EXTERNAL_STORAGE)
+                emptyList()
             }
             @OptIn(ExperimentalPermissionsApi::class)
             val permissionState = rememberMultiplePermissionsState(permissions = permissions)
