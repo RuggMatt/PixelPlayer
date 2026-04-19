@@ -948,6 +948,7 @@ class MainActivity : ComponentActivity() {
             ),
             label = "SyncProgressAnimation"
         )
+        val clampedAnimatedProgress = animatedProgress.coerceIn(0f, 1f)
 
         Column(
             modifier = modifier,
@@ -966,14 +967,14 @@ class MainActivity : ComponentActivity() {
                 ) {
                     if (syncProgress.hasProgress) {
                         CircularProgressIndicator(
-                            progress = { animatedProgress.coerceIn(0f, 1f) },
+                            progress = { clampedAnimatedProgress },
                             modifier = Modifier.height(48.dp)
                         )
                     } else {
                         CircularWavyProgressIndicator(modifier = Modifier.height(48.dp))
                     }
                     Text(
-                        text = if (syncProgress.hasProgress) "${(animatedProgress * 100).toInt()}%" else "…",
+                        text = if (syncProgress.hasProgress) "${(clampedAnimatedProgress * 100).toInt()}%" else "…",
                         style = MaterialTheme.typography.labelMedium
                     )
                 }

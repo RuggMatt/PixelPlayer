@@ -441,7 +441,7 @@ constructor(
                 }
             }
 
-            val chunkArtistIds = LinkedHashSet<Long>(songChunk.size + chunkCrossRefs.size)
+            val chunkArtistIds = LinkedHashSet<Long>()
             songChunk.forEach { chunkArtistIds.add(it.artistId) }
             chunkCrossRefs.forEach { chunkArtistIds.add(it.artistId) }
             val chunkAlbumIds = songChunk.mapTo(linkedSetOf()) { it.albumId }
