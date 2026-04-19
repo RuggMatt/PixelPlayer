@@ -8,6 +8,7 @@ import com.theveloper.pixelplay.data.ai.AiMetadataGenerator
 import com.theveloper.pixelplay.data.ai.AiNotificationManager
 import com.theveloper.pixelplay.data.ai.AiPlaylistGenerator
 import com.theveloper.pixelplay.data.ai.SongMetadata
+import com.theveloper.pixelplay.data.ai.AiSystemPromptType
 import com.theveloper.pixelplay.data.ai.provider.AiProviderException
 import com.theveloper.pixelplay.data.preferences.PlaylistPreferencesRepository
 import com.theveloper.pixelplay.data.model.Song
@@ -279,7 +280,7 @@ class AiStateHolder @Inject constructor(
                     allSongs = allSongs,
                     minLength = minLength,
                     maxLength = maxLength,
-                    candidateSongs = candidatePool
+                    candidateSongs = candidatePool, type = AiSystemPromptType.DAILY_MIX
                 )
 
                 result.onSuccess { generatedSongs ->
