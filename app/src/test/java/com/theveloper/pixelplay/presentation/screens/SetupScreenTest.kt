@@ -7,7 +7,7 @@ import org.junit.jupiter.api.Test
 class SetupScreenTest {
 
     @Test
-    fun `buildSetupPages does not include notifications page on android 13 plus`() {
+    fun `buildSetupPages does not include notifications page on android 13`() {
         val pages = buildSetupPages(Build.VERSION_CODES.TIRAMISU)
 
         assertEquals(
@@ -28,7 +28,7 @@ class SetupScreenTest {
     }
 
     @Test
-    fun `buildSetupPages keeps alarms page for android 12 plus`() {
+    fun `buildSetupPages includes alarms page on android 12`() {
         val pages = buildSetupPages(Build.VERSION_CODES.S)
 
         assertEquals(
