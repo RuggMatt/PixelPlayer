@@ -17,12 +17,28 @@ import kotlin.math.absoluteValue
 import kotlin.math.roundToInt
 
 object GenreTypography {
+    private val whitespaceRegex = Regex("\\s+")
 
     data class TitlePresentation(
         val firstLine: String,
         val secondLine: String?,
         val style: TextStyle,
         val secondLineWidthFraction: Float
+    )
+
+    private data class TitleCacheKey(
+        val genreId: String,
+        val normalizedGenreName: String,
+        val isGridView: Boolean,
+        val cardWidthPx: Int,
+        val horizontalPaddingPx: Int
+    )
+
+    private const val TITLE_PRESENTATION_CACHE_LIMIT = 256
+    private val titlePresentationCache = LinkedHashMap<TitleCacheKey, TitlePresentation>(
+        TITLE_PRESENTATION_CACHE_LIMIT,
+        0.75f,
+        true
     )
 
     @OptIn(ExperimentalTextApi::class)
@@ -34,7 +50,17 @@ object GenreTypography {
         horizontalPaddingPx: Int,
         textMeasurer: TextMeasurer
     ): TitlePresentation {
-        val normalizedName = genreName.trim().replace(Regex("\\s+"), " ")
+        val normalizedName = genreName.trim().replace(whitespaceRegex, " ")
+        val cacheKey = TitleCacheKey(
+            genreId = genreId,
+            normalizedGenreName = normalizedName,
+            isGridView = isGridView,
+            cardWidthPx = cardWidthPx,
+            horizontalPaddingPx = horizontalPaddingPx
+        )
+
+        getCachedTitlePresentation(cacheKey)?.let { return it }
+
         val profile = GenreTitleProfile.from(normalizedName)
         val hash = genreId.hashCode().toLong().absoluteValue
         val fullLineWidthPx = (cardWidthPx - (horizontalPaddingPx * 2)).coerceAtLeast(0)
@@ -50,7 +76,7 @@ object GenreTypography {
                     secondLine = null,
                     style = style,
                     secondLineWidthFraction = secondLineWidthFraction
-                )
+                ).also { putCachedTitlePresentation(cacheKey, it) }
             }
 
             if (words.size > 1) {
@@ -69,7 +95,7 @@ object GenreTypography {
                         secondLine = bestBreak.secondLine,
                         style = style,
                         secondLineWidthFraction = secondLineWidthFraction
-                    )
+                    ).also { putCachedTitlePresentation(cacheKey, it) }
                 }
             }
         }
@@ -93,12 +119,12 @@ object GenreTypography {
             secondLine = fallbackBreak?.secondLine,
             style = fallbackStyle,
             secondLineWidthFraction = secondLineWidthFraction
-        )
+        ).also { putCachedTitlePresentation(cacheKey, it) }
     }
 
     @OptIn(ExperimentalTextApi::class)
     fun getGenreStyle(genreId: String, genreName: String): TextStyle {
-        val normalizedName = genreName.trim().replace(Regex("\\s+"), " ")
+        val normalizedName = genreName.trim().replace(whitespaceRegex, " ")
         val profile = GenreTitleProfile.from(normalizedName)
         val hash = genreId.hashCode().toLong().absoluteValue
         return buildStyleCandidates(hash = hash, profile = profile, isGridView = true).first()
@@ -385,6 +411,23 @@ object GenreTypography {
     private fun axisJitter(hash: Long, divisor: Long, span: Float): Float {
         val normalized = ((hash / divisor) % 1000).toFloat() / 999f
         return (normalized - 0.5f) * span
+    }
+
+    @Synchronized
+    private fun getCachedTitlePresentation(key: TitleCacheKey): TitlePresentation? {
+        return titlePresentationCache[key]
+    }
+
+    @Synchronized
+    private fun putCachedTitlePresentation(key: TitleCacheKey, value: TitlePresentation) {
+        titlePresentationCache[key] = value
+        if (titlePresentationCache.size > TITLE_PRESENTATION_CACHE_LIMIT) {
+            val iterator = titlePresentationCache.entries.iterator()
+            if (iterator.hasNext()) {
+                iterator.next()
+                iterator.remove()
+            }
+        }
     }
 
     private data class BreakCandidate(
