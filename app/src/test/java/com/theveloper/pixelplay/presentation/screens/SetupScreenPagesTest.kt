@@ -7,7 +7,7 @@ import org.junit.Test
 class SetupScreenPagesTest {
 
     @Test
-    fun buildSetupPages_excludesDirectorySelection_whenAllFilesPermissionNotGranted() {
+    fun buildSetupPages_returnsOnlyMediaPermission() {
         val pages = buildSetupPages()
 
         assertFalse(pages.contains(SetupPage.DirectorySelection))
@@ -15,7 +15,7 @@ class SetupScreenPagesTest {
     }
 
     @Test
-    fun buildSetupPages_includesDirectorySelection_whenAllFilesPermissionGranted() {
+    fun buildSetupPages_neverIncludesDirectorySelection() {
         val pages = buildSetupPages()
 
         assertFalse(pages.contains(SetupPage.DirectorySelection))
