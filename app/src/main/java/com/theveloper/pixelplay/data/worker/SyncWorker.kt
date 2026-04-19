@@ -215,16 +215,72 @@ constructor(
                                     forceMetadata,
                                     directoryResolver,
                                     syncMode == SyncMode.REBUILD,
-                                    progressBatchSize
-                            ) { current, total, phaseOrdinal ->
-                                setProgress(
-                                        workDataOf(
-                                                PROGRESS_CURRENT to current,
-                                                PROGRESS_TOTAL to total,
-                                                PROGRESS_PHASE to phaseOrdinal
+                                    progressBatchSize,
+                                    onProgress = { current, total, phaseOrdinal ->
+                                        setProgress(
+                                                workDataOf(
+                                                        PROGRESS_CURRENT to current,
+                                                        PROGRESS_TOTAL to total,
+                                                        PROGRESS_PHASE to phaseOrdinal
+                                                )
                                         )
-                                )
-                            }
+                                    },
+                                    onSongsBatchReady = { provisionalSongs ->
+                                        if (syncMode != SyncMode.REBUILD && provisionalSongs.isNotEmpty()) {
+                                            val provisionalArtists =
+                                                    provisionalSongs
+                                                            .groupBy { it.artistId }
+                                                            .mapNotNull { (artistId, songsForArtist) ->
+                                                                val representative =
+                                                                        songsForArtist
+                                                                                .firstOrNull {
+                                                                                    it.artistName
+                                                                                            .isNotBlank()
+                                                                                }
+                                                                                ?: songsForArtist.firstOrNull()
+                                                                                ?: return@mapNotNull null
+                                                                ArtistEntity(
+                                                                        id = artistId,
+                                                                        name = representative.artistName,
+                                                                        trackCount = 0
+                                                                )
+                                                            }
+                                            val provisionalAlbums =
+                                                    provisionalSongs
+                                                            .groupBy { it.albumId }
+                                                            .mapNotNull { (albumId, songsForAlbum) ->
+                                                                val representative =
+                                                                        songsForAlbum.maxByOrNull {
+                                                                            var score = 0
+                                                                            if (it.albumName.isNotBlank()) score += 4
+                                                                            if (!it.albumArtist.isNullOrBlank()) score += 2
+                                                                            if (!it.albumArtUriString.isNullOrBlank()) score += 2
+                                                                            if (it.year > 0) score += 1
+                                                                            score
+                                                                        } ?: songsForAlbum.firstOrNull()
+                                                                                ?: return@mapNotNull null
+                                                                AlbumEntity(
+                                                                        id = albumId,
+                                                                        title = representative.albumName,
+                                                                        artistName =
+                                                                                representative.albumArtist
+                                                                                        ?: representative.artistName,
+                                                                        artistId = representative.artistId,
+                                                                        albumArtUriString =
+                                                                                representative.albumArtUriString,
+                                                                        songCount = 0,
+                                                                        dateAdded = representative.dateAdded,
+                                                                        year = representative.year
+                                                                )
+                                                            }
+                                            musicDao.insertMusicDataWithIgnoredParentConflicts(
+                                                    songs = provisionalSongs,
+                                                    albums = provisionalAlbums,
+                                                    artists = provisionalArtists
+                                            )
+                                        }
+                                    }
+                            )
 
                     Timber.tag(TAG)
                         .i("Fetched ${songsToInsert.size} new/modified songs from MediaStore.")
@@ -281,15 +337,24 @@ constructor(
                                     crossRefs
                             )
                         } else {
-                            // incrementalSyncMusicData handles upserts efficiently
-                            // processing deleted songs was already handled at the start
-                            musicDao.incrementalSyncMusicData(
+                            // Commit local songs in chunks so UI can start using imported songs
+                            // while the initial import is still running.
+                            upsertSongsInBatchesForUi(
                                     songs = correctedSongs,
                                     albums = albums,
                                     artists = artists,
-                                    crossRefs = crossRefs,
-                                    deletedSongIds = emptyList() // Already handled
-                            )
+                                    crossRefs = crossRefs
+                            ) { savedCount, totalCount ->
+                                setProgress(
+                                        workDataOf(
+                                                PROGRESS_CURRENT to savedCount,
+                                                PROGRESS_TOTAL to totalCount,
+                                                PROGRESS_PHASE to
+                                                        SyncProgress.SyncPhase.SAVING_TO_DATABASE
+                                                                .ordinal
+                                        )
+                                )
+                            }
                         }
 
                         // Clear the rescan required flag
@@ -409,6 +474,40 @@ constructor(
                     Trace.endSection() // End SyncWorker.doWork
                 }
             }
+
+    private suspend fun upsertSongsInBatchesForUi(
+            songs: List<SongEntity>,
+            albums: List<AlbumEntity>,
+            artists: List<ArtistEntity>,
+            crossRefs: List<SongArtistCrossRef>,
+            onBatchCommitted: suspend (savedCount: Int, totalCount: Int) -> Unit
+    ) {
+        if (songs.isEmpty()) return
+
+        val artistsById = artists.associateBy { it.id }
+        val albumsById = albums.associateBy { it.id }
+        val crossRefsBySongId = crossRefs.groupBy { it.songId }
+        var savedCount = 0
+
+        songs.chunked(UI_VISIBLE_INSERT_BATCH_SIZE).forEach { songChunk ->
+            val songIds = songChunk.map { it.id }
+            val chunkCrossRefs = songIds.flatMap { crossRefsBySongId[it].orEmpty() }
+            val chunkArtistIds = (songChunk.map { it.artistId } + chunkCrossRefs.map { it.artistId }).toSet()
+            val chunkAlbumIds = songChunk.map { it.albumId }.toSet()
+
+            musicDao.incrementalSyncMusicDataChunk(
+                    songs = songChunk,
+                    albums = chunkAlbumIds.mapNotNull { albumsById[it] },
+                    artists = chunkArtistIds.mapNotNull { artistsById[it] },
+                    crossRefs = chunkCrossRefs
+            )
+
+            savedCount += songChunk.size
+            onBatchCommitted(savedCount, songs.size)
+        }
+
+        musicDao.cleanupIncrementalSyncOrphans()
+    }
 
     /** Data class to hold the result of multi-artist preprocessing. */
     private data class MultiArtistProcessResult(
@@ -722,7 +821,8 @@ constructor(
             directoryResolver: DirectoryRuleResolver,
             isRebuild: Boolean,
             progressBatchSize: Int,
-            onProgress: suspend (current: Int, total: Int, phaseOrdinal: Int) -> Unit
+            onProgress: suspend (current: Int, total: Int, phaseOrdinal: Int) -> Unit,
+            onSongsBatchReady: (suspend (songs: List<SongEntity>) -> Unit)? = null
     ): List<SongEntity> {
         Trace.beginSection("SyncWorker.fetchMusicFromMediaStore")
 
@@ -899,6 +999,7 @@ constructor(
         // Process batches sequentially so each batch's existingMap can be GC'd before the next
         // batch is loaded. The semaphore still limits concurrency within each batch.
         val songs = mutableListOf<SongEntity>()
+        var provisionalImportCursor = 0
         for (batch in songsToProcess.chunked(200)) {
             val ids = batch.map { it.id }
             val existingMap = if (isRebuild) emptyMap() else musicDao.getSongsByIdsListSimple(ids).associateBy { it.id }
@@ -947,6 +1048,18 @@ constructor(
                 }.awaitAll()
             }
             songs.addAll(batchResults)
+            onSongsBatchReady?.let { callback ->
+                while (songs.size - provisionalImportCursor >= UI_VISIBLE_INSERT_BATCH_SIZE) {
+                    val nextCursor = provisionalImportCursor + UI_VISIBLE_INSERT_BATCH_SIZE
+                    callback(songs.subList(provisionalImportCursor, nextCursor).toList())
+                    provisionalImportCursor = nextCursor
+                }
+            }
+        }
+        onSongsBatchReady?.let { callback ->
+            if (provisionalImportCursor < songs.size) {
+                callback(songs.subList(provisionalImportCursor, songs.size).toList())
+            }
         }
 
         Trace.endSection()
@@ -1349,6 +1462,7 @@ constructor(
         private const val NETEASE_PARENT_DIRECTORY = "/Cloud/Netease"
         private const val NETEASE_GENRE = "Netease Cloud"
         private const val ANDROID_MEDIA_RELATIVE_PATH = "Android/media"
+        private const val UI_VISIBLE_INSERT_BATCH_SIZE = 500
 
         // Genre cache - shared across worker instances to avoid refetching on incremental syncs
         private const val GENRE_CACHE_TTL_MS = 60 * 60 * 1000L // 1 hour
