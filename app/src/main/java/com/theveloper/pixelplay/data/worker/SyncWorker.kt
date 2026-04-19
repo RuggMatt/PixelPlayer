@@ -230,14 +230,15 @@ constructor(
                                             val provisionalArtists =
                                                     provisionalSongs
                                                             .groupBy { it.artistId }
-                                                            .map { (artistId, songsForArtist) ->
+                                                            .mapNotNull { (artistId, songsForArtist) ->
                                                                 val representative =
                                                                         songsForArtist
                                                                                 .firstOrNull {
                                                                                     it.artistName
                                                                                             .isNotBlank()
                                                                                 }
-                                                                                ?: songsForArtist.first()
+                                                                                ?: songsForArtist.firstOrNull()
+                                                                                ?: return@mapNotNull null
                                                                 ArtistEntity(
                                                                         id = artistId,
                                                                         name = representative.artistName,
@@ -247,17 +248,17 @@ constructor(
                                             val provisionalAlbums =
                                                     provisionalSongs
                                                             .groupBy { it.albumId }
-                                                            .map { (albumId, songsForAlbum) ->
+                                                            .mapNotNull { (albumId, songsForAlbum) ->
                                                                 val representative =
                                                                         songsForAlbum.maxByOrNull {
                                                                             var score = 0
                                                                             if (it.albumName.isNotBlank()) score += 4
                                                                             if (!it.albumArtist.isNullOrBlank()) score += 2
-                                                                            if (!it.albumArtUriString.isNullOrBlank()) score +=
-                                                                                    2
+                                                                            if (!it.albumArtUriString.isNullOrBlank()) score += 2
                                                                             if (it.year > 0) score += 1
                                                                             score
-                                                                        } ?: songsForAlbum.first()
+                                                                        } ?: songsForAlbum.firstOrNull()
+                                                                                ?: return@mapNotNull null
                                                                 AlbumEntity(
                                                                         id = albumId,
                                                                         title = representative.albumName,
