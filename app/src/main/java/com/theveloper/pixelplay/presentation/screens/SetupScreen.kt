@@ -221,10 +221,11 @@ fun SetupScreen(
     val directorySelectionPageIndex = remember(pages) { pages.indexOf(SetupPage.DirectorySelection) }
     val batteryOptimizationPageIndex = remember(pages) { pages.indexOf(SetupPage.BatteryOptimization) }
     val finishPageIndex = remember(pages) { pages.indexOf(SetupPage.Finish) }
+    val completeSetup = remember(setupViewModel) { { setupViewModel.setSetupComplete() } }
 
     LaunchedEffect(uiState.mediaPermissionGranted) {
-        if (uiState.mediaPermissionGranted) {
-            setupViewModel.setSetupComplete()
+        if (uiState.mediaPermissionGranted || hasMediaPermissionNow(context)) {
+            completeSetup()
         }
     }
 
@@ -297,7 +298,7 @@ fun SetupScreen(
                 },
                 onFinishClicked = {
                     if (allRequiredPermissionsGrantedNow(context)) {
-                        setupViewModel.setSetupComplete()
+                        completeSetup()
                     } else {
                         setupViewModel.checkPermissions(context)
                         Toast.makeText(context, "Please grant all required permissions.", Toast.LENGTH_SHORT).show()

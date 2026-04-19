@@ -379,12 +379,18 @@ class SetupViewModel @Inject constructor(
     }
 
     private suspend fun applyDefaultDirectoryRulesIfUnset() {
-        val currentAllowed = userPreferencesRepository.allowedDirectoriesFlow.first()
-        val currentBlocked = userPreferencesRepository.blockedDirectoriesFlow.first()
+        val (currentAllowed, currentBlocked) = combine(
+            userPreferencesRepository.allowedDirectoriesFlow,
+            userPreferencesRepository.blockedDirectoriesFlow
+        ) { allowed, blocked ->
+            allowed to blocked
+        }.first()
         if (currentAllowed.isNotEmpty() || currentBlocked.isNotEmpty()) return
 
         // Uses legacy external root path API intentionally because directory rules are
         // absolute filesystem paths and this remains the stable root used across the app.
+        // Scoped storage still limits access by permission/rules; these paths only define
+        // logical include/exclude roots for the resolver.
         @Suppress("DEPRECATION")
         val externalRootPath = Environment.getExternalStorageDirectory().absolutePath
         val musicPath = File(externalRootPath, "Music").absolutePath
