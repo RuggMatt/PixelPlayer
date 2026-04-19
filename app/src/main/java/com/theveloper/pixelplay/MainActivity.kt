@@ -230,12 +230,6 @@ class MainActivity : ComponentActivity() {
                 }
             }
 
-            LaunchedEffect(isBenchmarkMode, isSetupComplete, permissionsValid) {
-                if (!isBenchmarkMode && isSetupComplete == false && permissionsValid) {
-                    userPreferencesRepository.setInitialSetupDone(true)
-                }
-            }
-
             // Sync Trigger: When we are NOT showing setup (meaning permissions are good and setup is done)
             LaunchedEffect(showSetupScreen) {
                 if (showSetupScreen == false) {

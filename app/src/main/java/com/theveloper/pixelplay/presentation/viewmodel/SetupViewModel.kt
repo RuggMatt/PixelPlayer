@@ -5,7 +5,6 @@ import android.content.Context
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
-import android.os.Environment
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -383,14 +382,21 @@ class SetupViewModel @Inject constructor(
         val currentBlocked = userPreferencesRepository.blockedDirectoriesFlow.first()
         if (currentAllowed.isNotEmpty() || currentBlocked.isNotEmpty()) return
 
-        val externalRoot = Environment.getExternalStorageDirectory()
-        val musicPath = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_MUSIC).absolutePath
+        val externalRoot = context.getExternalFilesDir(null)
+            ?.canonicalFile
+            ?.parentFile
+            ?.parentFile
+            ?.parentFile
+            ?.parentFile
+            ?: File("/storage/emulated/0")
+        val externalRootPath = externalRoot.absolutePath
+        val musicPath = File(externalRoot, "Music").absolutePath
         val androidPath = File(externalRoot, "Android").absolutePath
-        val ringtonesPath = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_RINGTONES).absolutePath
+        val ringtonesPath = File(externalRoot, "Ringtones").absolutePath
 
         userPreferencesRepository.updateDirectorySelections(
             allowedPaths = setOf(musicPath),
-            blockedPaths = setOf(externalRoot.absolutePath, androidPath, ringtonesPath)
+            blockedPaths = setOf(externalRootPath, androidPath, ringtonesPath)
         )
     }
 }
