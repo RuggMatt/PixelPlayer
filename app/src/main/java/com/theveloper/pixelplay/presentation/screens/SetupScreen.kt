@@ -245,8 +245,6 @@ fun SetupScreen(
 
                     if (targetPageIndex != null) {
                         pagerState.animateScrollToPage(targetPageIndex)
-                    } else {
-                        setupViewModel.setSetupComplete()
                     }
                 }
             }

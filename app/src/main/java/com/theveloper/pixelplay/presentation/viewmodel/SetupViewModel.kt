@@ -383,6 +383,8 @@ class SetupViewModel @Inject constructor(
         val currentBlocked = userPreferencesRepository.blockedDirectoriesFlow.first()
         if (currentAllowed.isNotEmpty() || currentBlocked.isNotEmpty()) return
 
+        // Uses legacy external root path API intentionally because directory rules are
+        // absolute filesystem paths and this remains the stable root used across the app.
         @Suppress("DEPRECATION")
         val externalRootPath = Environment.getExternalStorageDirectory().absolutePath
         val musicPath = File(externalRootPath, "Music").absolutePath
