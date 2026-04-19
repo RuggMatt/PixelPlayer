@@ -33,7 +33,6 @@ import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
@@ -52,6 +51,8 @@ import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBarDefaults
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -461,7 +462,6 @@ class MainActivity : ComponentActivity() {
         Trace.beginSection("MainActivity.MainAppContent")
         val navController = rememberNavController()
         val isSyncing by mainViewModel.isSyncing.collectAsStateWithLifecycle()
-        val isLibraryEmpty by mainViewModel.isLibraryEmpty.collectAsStateWithLifecycle()
         val hasCompletedInitialSync by mainViewModel.hasCompletedInitialSync.collectAsStateWithLifecycle()
         val syncProgress by mainViewModel.syncProgress.collectAsStateWithLifecycle()
         
@@ -471,6 +471,7 @@ class MainActivity : ComponentActivity() {
         // Observe pending playlist navigation
         val pendingPlaylistNav by _pendingPlaylistNavigation.collectAsStateWithLifecycle()
         var processedPlaylistId by remember { mutableStateOf<String?>(null) }
+        var isInitialImportDetailsExpanded by remember { mutableStateOf(false) }
         
         LaunchedEffect(pendingPlaylistNav, isMediaControllerReady) {
             val playlistId = pendingPlaylistNav
@@ -500,45 +501,25 @@ class MainActivity : ComponentActivity() {
             }
         }
 
-        // Estado para controlar si el indicador de carga puede mostrarse después de un delay
-        var canShowLoadingIndicator by remember { mutableStateOf(false) }
-        // Track when the loading indicator was first shown for minimum display time
-        var loadingShownTimestamp by remember { mutableStateOf(0L) }
-        val minimumDisplayDuration = 1500L // Show loading for at least 1.5 seconds
-
-        val shouldPotentiallyShowLoading = isSyncing && isLibraryEmpty && !hasCompletedInitialSync
-
-        LaunchedEffect(shouldPotentiallyShowLoading) {
-            if (shouldPotentiallyShowLoading) {
-                // Espera un breve período antes de permitir que se muestre el indicador de carga
-                // Ajusta este valor según sea necesario (por ejemplo, 300-500 ms)
-                delay(300L)
-                // Vuelve a verificar la condición después del delay,
-                // ya que el estado podría haber cambiado.
-                if (mainViewModel.isSyncing.value && mainViewModel.isLibraryEmpty.value) {
-                    canShowLoadingIndicator = true
-                    loadingShownTimestamp = System.currentTimeMillis()
-                }
-            } else {
-                // Ensure minimum display time before hiding
-                if (canShowLoadingIndicator && loadingShownTimestamp > 0) {
-                    val elapsed = System.currentTimeMillis() - loadingShownTimestamp
-                    val remaining = minimumDisplayDuration - elapsed
-                    if (remaining > 0) {
-                        delay(remaining)
-                    }
-                }
-                canShowLoadingIndicator = false
-                loadingShownTimestamp = 0L
+        val shouldShowInitialImportIndicator = isSyncing && !hasCompletedInitialSync
+        LaunchedEffect(shouldShowInitialImportIndicator) {
+            if (!shouldShowInitialImportIndicator) {
+                isInitialImportDetailsExpanded = false
             }
         }
 
         Box(modifier = Modifier.fillMaxSize()) {
             MainUI(playerViewModel, navController)
 
-            // Muestra el LoadingOverlay solo si las condiciones se cumplen Y el delay ha pasado
-            if (canShowLoadingIndicator) {
-                LoadingOverlay(syncProgress)
+            if (shouldShowInitialImportIndicator) {
+                InitialImportProgressIndicator(
+                    syncProgress = syncProgress,
+                    expanded = isInitialImportDetailsExpanded,
+                    onExpandedChange = { isInitialImportDetailsExpanded = it },
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(top = 16.dp, end = 16.dp)
+                )
             }
         }
         Trace.endSection() // End MainActivity.MainAppContent
@@ -953,8 +934,12 @@ class MainActivity : ComponentActivity() {
 
     @OptIn(ExperimentalMaterial3ExpressiveApi::class)
     @Composable
-    private fun LoadingOverlay(syncProgress: SyncProgress) {
-        // Animate progress smoothly instead of jumping in steps
+    private fun InitialImportProgressIndicator(
+        syncProgress: SyncProgress,
+        expanded: Boolean,
+        onExpandedChange: (Boolean) -> Unit,
+        modifier: Modifier = Modifier
+    ) {
         val animatedProgress by androidx.compose.animation.core.animateFloatAsState(
             targetValue = syncProgress.progress,
             animationSpec = androidx.compose.animation.core.spring(
@@ -963,41 +948,82 @@ class MainActivity : ComponentActivity() {
             ),
             label = "SyncProgressAnimation"
         )
-        
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(MaterialTheme.colorScheme.background.copy(alpha = 0.9f))
-                .clickable(enabled = false, onClick = {}),
-            contentAlignment = Alignment.Center
+
+        Column(
+            modifier = modifier,
+            horizontalAlignment = Alignment.End
         ) {
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                modifier = Modifier.padding(horizontal = 32.dp)
+            Surface(
+                shape = MaterialTheme.shapes.extraLarge,
+                color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                tonalElevation = 6.dp,
+                modifier = Modifier.clickable { onExpandedChange(!expanded) }
             ) {
-                CircularWavyProgressIndicator()
-                Spacer(modifier = Modifier.height(16.dp))
-                Text(
-                    text = "Preparing your library...",
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.onBackground
-                )
-                
-                if (syncProgress.hasProgress) {
-                    Spacer(modifier = Modifier.height(16.dp))
-                    androidx.compose.material3.LinearWavyProgressIndicator(
-                        progress = { animatedProgress },
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
+                Box(
+                    modifier = Modifier
+                        .padding(10.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    if (syncProgress.hasProgress) {
+                        CircularProgressIndicator(
+                            progress = { animatedProgress.coerceIn(0f, 1f) },
+                            modifier = Modifier.height(48.dp)
+                        )
+                    } else {
+                        CircularWavyProgressIndicator(modifier = Modifier.height(48.dp))
+                    }
                     Text(
-                        text = "Scanned ${syncProgress.currentCount} of ${syncProgress.totalCount} songs",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        text = if (syncProgress.hasProgress) "${(animatedProgress * 100).toInt()}%" else "…",
+                        style = MaterialTheme.typography.labelMedium
                     )
                 }
             }
+
+            AnimatedVisibility(visible = expanded) {
+                Surface(
+                    shape = MaterialTheme.shapes.large,
+                    color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                    tonalElevation = 8.dp,
+                    modifier = Modifier
+                        .padding(top = 8.dp)
+                        .fillMaxWidth(0.76f)
+                ) {
+                    Column(modifier = Modifier.padding(14.dp)) {
+                        Text(
+                            text = "Library import running",
+                            style = MaterialTheme.typography.titleSmall
+                        )
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Text(
+                            text = "Phase: ${syncProgress.phase.toUiLabel()}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        if (syncProgress.hasProgress) {
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = "Imported ${syncProgress.currentCount} of ${syncProgress.totalCount} songs",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(10.dp))
+                        OutlinedButton(onClick = { onExpandedChange(false) }) {
+                            Text("Dismiss")
+                        }
+                    }
+                }
+            }
         }
+    }
+
+    private fun SyncProgress.SyncPhase.toUiLabel(): String = when (this) {
+        SyncProgress.SyncPhase.IDLE -> "Starting"
+        SyncProgress.SyncPhase.FETCHING_MEDIASTORE -> "Scanning media store"
+        SyncProgress.SyncPhase.PROCESSING_FILES -> "Reading metadata"
+        SyncProgress.SyncPhase.SAVING_TO_DATABASE -> "Importing songs"
+        SyncProgress.SyncPhase.SCANNING_LRC -> "Scanning lyrics"
+        SyncProgress.SyncPhase.COMPLETING -> "Finalizing"
     }
 
 

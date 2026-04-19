@@ -301,6 +301,23 @@ interface MusicDao {
             }
         }
 
+        incrementalSyncMusicDataChunk(
+            songs = songs,
+            albums = albums,
+            artists = artists,
+            crossRefs = crossRefs
+        )
+
+        cleanupIncrementalSyncOrphans()
+    }
+
+    @Transaction
+    suspend fun incrementalSyncMusicDataChunk(
+        songs: List<SongEntity>,
+        albums: List<AlbumEntity>,
+        artists: List<ArtistEntity>,
+        crossRefs: List<SongArtistCrossRef>
+    ) {
         // Upsert artists, albums, and songs.
         insertArtists(artists)
         insertAlbums(albums)
@@ -318,7 +335,10 @@ interface MusicDao {
         crossRefs.chunked(CROSS_REF_BATCH_SIZE).forEach { chunk ->
             insertSongArtistCrossRefs(chunk)
         }
+    }
 
+    @Transaction
+    suspend fun cleanupIncrementalSyncOrphans() {
         // Clean up orphaned albums and artists
         deleteOrphanedAlbums()
         deleteOrphanedArtists()

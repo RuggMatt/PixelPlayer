@@ -281,15 +281,24 @@ constructor(
                                     crossRefs
                             )
                         } else {
-                            // incrementalSyncMusicData handles upserts efficiently
-                            // processing deleted songs was already handled at the start
-                            musicDao.incrementalSyncMusicData(
+                            // Commit local songs in chunks so UI can start using imported songs
+                            // while the initial import is still running.
+                            upsertSongsInBatchesForUi(
                                     songs = correctedSongs,
                                     albums = albums,
                                     artists = artists,
-                                    crossRefs = crossRefs,
-                                    deletedSongIds = emptyList() // Already handled
-                            )
+                                    crossRefs = crossRefs
+                            ) { savedCount, totalCount ->
+                                setProgress(
+                                        workDataOf(
+                                                PROGRESS_CURRENT to savedCount,
+                                                PROGRESS_TOTAL to totalCount,
+                                                PROGRESS_PHASE to
+                                                        SyncProgress.SyncPhase.SAVING_TO_DATABASE
+                                                                .ordinal
+                                        )
+                                )
+                            }
                         }
 
                         // Clear the rescan required flag
@@ -409,6 +418,47 @@ constructor(
                     Trace.endSection() // End SyncWorker.doWork
                 }
             }
+
+    private suspend fun upsertSongsInBatchesForUi(
+            songs: List<SongEntity>,
+            albums: List<AlbumEntity>,
+            artists: List<ArtistEntity>,
+            crossRefs: List<SongArtistCrossRef>,
+            onBatchCommitted: suspend (savedCount: Int, totalCount: Int) -> Unit
+    ) {
+        if (songs.isEmpty()) return
+
+        val artistsById = artists.associateBy { it.id }
+        val albumsById = albums.associateBy { it.id }
+        val crossRefsBySongId = crossRefs.groupBy { it.songId }
+        var savedCount = 0
+
+        songs.chunked(UI_VISIBLE_INSERT_BATCH_SIZE).forEach { songChunk ->
+            val songIds = songChunk.map { it.id }
+            val chunkCrossRefs = buildList {
+                songIds.forEach { songId ->
+                    addAll(crossRefsBySongId[songId].orEmpty())
+                }
+            }
+
+            val chunkArtistIds = LinkedHashSet<Long>(songChunk.size + chunkCrossRefs.size)
+            songChunk.forEach { chunkArtistIds.add(it.artistId) }
+            chunkCrossRefs.forEach { chunkArtistIds.add(it.artistId) }
+            val chunkAlbumIds = songChunk.mapTo(linkedSetOf()) { it.albumId }
+
+            musicDao.incrementalSyncMusicDataChunk(
+                    songs = songChunk,
+                    albums = chunkAlbumIds.mapNotNull { albumsById[it] },
+                    artists = chunkArtistIds.mapNotNull { artistsById[it] },
+                    crossRefs = chunkCrossRefs
+            )
+
+            savedCount += songChunk.size
+            onBatchCommitted(savedCount, songs.size)
+        }
+
+        musicDao.cleanupIncrementalSyncOrphans()
+    }
 
     /** Data class to hold the result of multi-artist preprocessing. */
     private data class MultiArtistProcessResult(
@@ -1349,6 +1399,7 @@ constructor(
         private const val NETEASE_PARENT_DIRECTORY = "/Cloud/Netease"
         private const val NETEASE_GENRE = "Netease Cloud"
         private const val ANDROID_MEDIA_RELATIVE_PATH = "Android/media"
+        private const val UI_VISIBLE_INSERT_BATCH_SIZE = 500
 
         // Genre cache - shared across worker instances to avoid refetching on incremental syncs
         private const val GENRE_CACHE_TTL_MS = 60 * 60 * 1000L // 1 hour
