@@ -15,6 +15,7 @@ class SetupScreenPagesTest {
         )
 
         assertFalse(pages.contains(SetupPage.DirectorySelection))
+        assertFalse(pages.contains(SetupPage.BackupRestore))
     }
 
     @Test
@@ -25,5 +26,6 @@ class SetupScreenPagesTest {
         )
 
         assertTrue(pages.contains(SetupPage.DirectorySelection))
+        assertFalse(pages.contains(SetupPage.BackupRestore))
     }
 }

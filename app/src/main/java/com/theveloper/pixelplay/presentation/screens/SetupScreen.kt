@@ -559,7 +559,6 @@ internal fun buildSetupPages(
         SetupPage.MediaPermission
     )
 
-    pages += SetupPage.BackupRestore
     if (includeDirectorySelection) {
         pages += SetupPage.DirectorySelection
     }

@@ -14,7 +14,6 @@ class SetupScreenTest {
             listOf(
                 SetupPage.Welcome,
                 SetupPage.MediaPermission,
-                SetupPage.BackupRestore,
                 SetupPage.DirectorySelection,
                 SetupPage.ThemeSelection,
                 SetupPage.LibraryLayout,
@@ -35,7 +34,6 @@ class SetupScreenTest {
             listOf(
                 SetupPage.Welcome,
                 SetupPage.MediaPermission,
-                SetupPage.BackupRestore,
                 SetupPage.DirectorySelection,
                 SetupPage.ThemeSelection,
                 SetupPage.LibraryLayout,
