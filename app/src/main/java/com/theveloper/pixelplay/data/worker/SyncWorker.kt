@@ -436,7 +436,7 @@ constructor(
         songs.chunked(UI_VISIBLE_INSERT_BATCH_SIZE).forEach { songChunk ->
             val songIds = songChunk.map { it.id }
             val chunkCrossRefs = songIds.flatMap { crossRefsBySongId[it].orEmpty() }
-            val chunkArtistIds = linkedSetOf<Long>().apply {
+            val chunkArtistIds = mutableSetOf<Long>().apply {
                 addAll(songChunk.map { it.artistId })
                 addAll(chunkCrossRefs.map { it.artistId })
             }

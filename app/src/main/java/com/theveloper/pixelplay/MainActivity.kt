@@ -949,6 +949,7 @@ class MainActivity : ComponentActivity() {
             label = "SyncProgressAnimation"
         )
         val clampedAnimatedProgress = animatedProgress.coerceIn(0f, 1f)
+        val progressPercentLabel = "${(clampedAnimatedProgress * 100).toInt()}%"
 
         Column(
             modifier = modifier,
@@ -974,7 +975,7 @@ class MainActivity : ComponentActivity() {
                         CircularWavyProgressIndicator(modifier = Modifier.height(48.dp))
                     }
                     Text(
-                        text = if (syncProgress.hasProgress) "${(clampedAnimatedProgress * 100).toInt()}%" else "...",
+                        text = if (syncProgress.hasProgress) progressPercentLabel else "...",
                         style = MaterialTheme.typography.labelMedium
                     )
                 }
