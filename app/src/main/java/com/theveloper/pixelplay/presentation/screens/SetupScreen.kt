@@ -788,7 +788,7 @@ fun MediaPermissionPage(
                 Text("Continue without full access")
             }
         }
-    )
+    }
 }
 
 @Composable

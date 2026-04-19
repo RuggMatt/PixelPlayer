@@ -214,7 +214,7 @@ class MainActivity : ComponentActivity() {
             
             // Permissions Logic
             val permissions = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                emptyList()
+                listOf(Manifest.permission.READ_MEDIA_AUDIO)
             } else {
                 emptyList()
             }
